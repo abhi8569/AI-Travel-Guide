@@ -668,7 +668,18 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun scanMapCenterArea() {
-        _uiState.update { it.copy(useMapCenter = true, locationTrackingActive = false) }
+        _uiState.update { 
+            it.copy(
+                useMapCenter = true, 
+                locationTrackingActive = false,
+                nearbyPlaces = emptyList(),
+                availableInterests = emptyList(),
+                activePlace = null,
+                guideContent = null,
+                chatHistory = emptyList(),
+                isSearchingPlaces = true
+            ) 
+        }
         lastQueriedLocation = null
         viewModelScope.launch {
             val center = _uiState.value.mapCenterLocation 
