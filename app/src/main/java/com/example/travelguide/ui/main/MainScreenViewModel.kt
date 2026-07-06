@@ -259,7 +259,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         } else {
             places
         }
-        val categories = popularPlaces.map { it.category }.distinct().sorted()
+        val categories = if (settings.isGodModeActive) emptyList() else popularPlaces.map { it.category }.distinct().sorted()
         
         _uiState.update { 
             it.copy(
@@ -339,7 +339,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
-    fun selectPlaceWithoutNarration(place: PlaceOfInterest) {
+    fun selectPlaceWithoutNarration(place: PlaceOfInterest?) {
         ttsManager.stop()
         _uiState.update { 
             it.copy(
@@ -701,6 +701,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         _uiState.update { 
             it.copy(
                 nearbyPlaces = emptyList(),
+                availableInterests = emptyList(),
                 activePlace = null,
                 guideContent = null,
                 isSpeaking = false,

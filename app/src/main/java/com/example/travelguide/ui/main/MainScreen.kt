@@ -113,7 +113,8 @@ fun LeafletMapView(
     activePlace: PlaceOfInterest? = null,
     modifier: Modifier = Modifier,
     onMarkerClick: (PlaceOfInterest) -> Unit = {},
-    onMapCenterChanged: (Double, Double) -> Unit = { _, _ -> }
+    onMapCenterChanged: (Double, Double) -> Unit = { _, _ -> },
+    onMapClick: () -> Unit = {}
 ) {
     val context = LocalContext.current
 
@@ -229,10 +230,25 @@ fun LeafletMapView(
         }
     }
 
+    val currentOnMapClick by rememberUpdatedState(onMapClick)
     val isZoomedIn = zoomLevel >= 11.5
+
     // Handle state updates natively and map updates smoothly on UI thread
     LaunchedEffect(userLat, userLon, places, isZoomedIn, activePlace) {
         mapView.overlays.clear()
+        org.osmdroid.views.overlay.infowindow.InfoWindow.closeAllInfoWindowsOn(mapView)
+
+        // Add map events overlay to detect background clicks
+        val eventsOverlay = org.osmdroid.views.overlay.MapEventsOverlay(object : org.osmdroid.events.MapEventsReceiver {
+            override fun singleTapConfirmedHelper(p: org.osmdroid.util.GeoPoint?): Boolean {
+                currentOnMapClick()
+                return true
+            }
+            override fun longPressHelper(p: org.osmdroid.util.GeoPoint?): Boolean {
+                return false
+            }
+        })
+        mapView.overlays.add(eventsOverlay)
 
         // Add user marker
         if (userLat != null && userLon != null) {
@@ -862,7 +878,7 @@ fun DashboardView(
     state: TourGuideUiState,
     deviceHeading: Float,
     onPlaceSelect: (PlaceOfInterest) -> Unit,
-    onSelectPlaceWithoutNarration: (PlaceOfInterest) -> Unit,
+    onSelectPlaceWithoutNarration: (PlaceOfInterest?) -> Unit,
     onSpeakAgain: () -> Unit,
     onStopSpeaking: () -> Unit,
     onSendMessage: (String) -> Unit,
@@ -955,7 +971,8 @@ fun DashboardView(
                     onMarkerClick = { place ->
                         onSelectPlaceWithoutNarration(place)
                     },
-                    onMapCenterChanged = onMapCenterChanged
+                    onMapCenterChanged = onMapCenterChanged,
+                    onMapClick = { onSelectPlaceWithoutNarration(null) }
                 )
 
                 // Floating Controls Card at the Top of Map View
@@ -971,84 +988,81 @@ fun DashboardView(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // 1. Search Mode selection toggle (floating overlay)
+                        // 1. Map Mode Toggle Icon (Location / Pin mode)
                         Box(
                             modifier = Modifier
-                                .weight(1f)
+                                .size(40.dp)
                                 .clip(RoundedCornerShape(20.dp))
                                 .background(cardBgColor.copy(alpha = 0.85f))
                                 .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(20.dp))
-                                .padding(horizontal = 12.dp, vertical = 8.dp)
+                                .clickable { onToggleMapSearchMode() },
+                            contentAlignment = Alignment.Center
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("Mode: ", color = Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                Text(
-                                    text = if (state.useMapCenter) "Map Center" else "GPS Location",
-                                    color = secondaryGlow,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    fontSize = 11.sp,
-                                    modifier = Modifier.clickable { onToggleMapSearchMode() }
-                                )
-                            }
+                            Icon(
+                                imageVector = if (state.useMapCenter) Icons.Default.PinDrop else Icons.Default.MyLocation,
+                                contentDescription = "Toggle Map Mode",
+                                tint = secondaryGlow,
+                                modifier = Modifier.size(20.dp)
+                            )
                         }
 
-                        // 2. Expandable Filter / Radius toggle button!
+                        // 2. Filter Icon
                         Box(
                             modifier = Modifier
+                                .size(40.dp)
                                 .clip(RoundedCornerShape(20.dp))
                                 .background(if (showFiltersPanel) primaryGlow else cardBgColor.copy(alpha = 0.85f))
                                 .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(20.dp))
-                                .clickable { showFiltersPanel = !showFiltersPanel }
-                                .padding(horizontal = 12.dp, vertical = 8.dp)
+                                .clickable { showFiltersPanel = !showFiltersPanel },
+                            contentAlignment = Alignment.Center
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Icon(Icons.Default.Tune, contentDescription = null, modifier = Modifier.size(12.dp), tint = if (showFiltersPanel) Color.White else secondaryGlow)
-                                Text("Filters", color = if (showFiltersPanel) Color.White else textColor, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            }
+                            Icon(
+                                imageVector = Icons.Default.Tune,
+                                contentDescription = "Toggle Filters",
+                                tint = if (showFiltersPanel) Color.White else secondaryGlow,
+                                modifier = Modifier.size(20.dp)
+                            )
                         }
-                    }
 
-                    // 3. Location Search Bar (Always in Map View!)
-                    var searchQuery by remember { mutableStateOf("") }
-                    val keyboardController = LocalSoftwareKeyboardController.current
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = { searchQuery = it },
-                        placeholder = { Text("Search city, attraction or place...", color = Color.Gray, fontSize = 13.sp) },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        trailingIcon = {
-                            IconButton(
-                                onClick = {
-                                    if (searchQuery.isNotBlank()) {
-                                        onSearchCustomLocation(searchQuery)
-                                        keyboardController?.hide()
+                        // 3. Search Bar
+                        var searchQuery by remember { mutableStateOf("") }
+                        val keyboardController = LocalSoftwareKeyboardController.current
+                        OutlinedTextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            placeholder = { Text("Search places...", color = Color.Gray, fontSize = 12.sp) },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true,
+                            trailingIcon = {
+                                IconButton(
+                                    onClick = {
+                                        if (searchQuery.isNotBlank()) {
+                                            onSearchCustomLocation(searchQuery)
+                                            keyboardController?.hide()
+                                        }
                                     }
+                                ) {
+                                    Icon(imageVector = Icons.Default.Search, contentDescription = "Search", tint = secondaryGlow)
                                 }
-                            ) {
-                                Icon(imageVector = Icons.Default.Search, contentDescription = "Search Location", tint = secondaryGlow)
-                            }
-                        },
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                        keyboardActions = KeyboardActions(onSearch = {
-                            if (searchQuery.isNotBlank()) {
-                                onSearchCustomLocation(searchQuery)
-                                keyboardController?.hide()
-                            }
-                        }),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = textColor,
-                            unfocusedTextColor = textColor,
-                            focusedBorderColor = secondaryGlow,
-                            unfocusedBorderColor = textColor.copy(alpha = 0.15f),
-                            focusedContainerColor = cardBgColor.copy(alpha = 0.9f),
-                            unfocusedContainerColor = cardBgColor.copy(alpha = 0.9f)
-                        ),
-                        shape = RoundedCornerShape(12.dp)
-                    )
+                            },
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                            keyboardActions = KeyboardActions(onSearch = {
+                                if (searchQuery.isNotBlank()) {
+                                    onSearchCustomLocation(searchQuery)
+                                    keyboardController?.hide()
+                                }
+                            }),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = textColor,
+                                unfocusedTextColor = textColor,
+                                focusedBorderColor = primaryGlow,
+                                unfocusedBorderColor = Color.White.copy(alpha = 0.08f),
+                                focusedContainerColor = cardBgColor.copy(alpha = 0.85f),
+                                unfocusedContainerColor = cardBgColor.copy(alpha = 0.85f)
+                            ),
+                            shape = RoundedCornerShape(20.dp)
+                        )
+                    }
 
                     // 4. Expanded Filter & Radius panel!
                     if (showFiltersPanel) {
@@ -1176,28 +1190,73 @@ fun DashboardView(
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text(
-                                        text = String.format("%.0fm away", place.distance),
-                                        color = secondaryGlow,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 13.sp
-                                    )
+                                    // Distance & Direction info
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
-                                        val url = place.tags["url"]
-                                        if (!url.isNullOrBlank()) {
-                                            val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
-                                            IconButton(
-                                                onClick = { uriHandler.openUri(url) },
-                                                modifier = Modifier.size(36.dp)
+                                        val distText = if (place.distance >= 1000f) {
+                                            String.format("%.1f km", place.distance / 1000f)
+                                        } else {
+                                            String.format("%.0f m", place.distance)
+                                        }
+                                        Text(
+                                            text = distText,
+                                            color = secondaryGlow,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.sp
+                                        )
+
+                                        if (state.currentLocation != null) {
+                                            val bearing = calculateBearing(state.currentLocation.latitude, state.currentLocation.longitude, place.lat, place.lon)
+                                            val arrowRotation = (bearing - deviceHeading + 360) % 360
+                                            val cardinal = getCardinalDirection(bearing)
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(6.dp))
+                                                    .background(Color.White.copy(alpha = 0.05f))
+                                                    .padding(horizontal = 6.dp, vertical = 2.dp)
                                             ) {
                                                 Icon(
-                                                    imageVector = Icons.Default.Language,
-                                                    contentDescription = "Open Web Link",
-                                                    tint = Color.White
+                                                    imageVector = Icons.Default.Navigation,
+                                                    contentDescription = "Direction Pointer",
+                                                    tint = secondaryGlow,
+                                                    modifier = Modifier
+                                                        .size(10.dp)
+                                                        .rotate(arrowRotation)
                                                 )
+                                                Text(
+                                                    text = cardinal,
+                                                    color = Color.White,
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    // Action buttons (Website link in God Mode, Hear Guide in both)
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        if (state.settings.isGodModeActive) {
+                                            val url = place.tags["url"] ?: place.tags["website"]
+                                            if (!url.isNullOrBlank()) {
+                                                val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+                                                IconButton(
+                                                    onClick = { uriHandler.openUri(url) },
+                                                    modifier = Modifier.size(36.dp)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Language,
+                                                        contentDescription = "Open Web Link",
+                                                        tint = Color.White,
+                                                        modifier = Modifier.size(18.dp)
+                                                    )
+                                                }
                                             }
                                         }
                                         Button(
