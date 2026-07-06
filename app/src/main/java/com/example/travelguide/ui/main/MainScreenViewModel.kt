@@ -668,8 +668,22 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     fun scanMapCenterArea() {
         _uiState.update { it.copy(useMapCenter = true, locationTrackingActive = false) }
         lastQueriedLocation = null
-        val center = _uiState.value.mapCenterLocation ?: return
         viewModelScope.launch {
+            val center = _uiState.value.mapCenterLocation 
+                ?: _uiState.value.currentLocation 
+                ?: run {
+                    val lastKnown = locationTracker.getLastKnownLocation()
+                    if (lastKnown != null) {
+                        _uiState.update { it.copy(currentLocation = lastKnown, mapCenterLocation = lastKnown) }
+                        lastKnown
+                    } else {
+                        // Fallback to saved last location coordinates
+                        val saved = settingsRepository.lastLocationFlow.first()
+                        val fallback = UserLocation(saved.first, saved.second, 0f)
+                        _uiState.update { it.copy(mapCenterLocation = fallback) }
+                        fallback
+                    }
+                }
             searchPlacesNear(center.latitude, center.longitude, isAutoTrigger = false)
         }
     }

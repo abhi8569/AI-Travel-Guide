@@ -206,8 +206,9 @@ fun LeafletMapView(
         }
     }
 
+    val isZoomedIn = zoomLevel >= 11.5
     // Handle state updates natively and map updates smoothly on UI thread
-    LaunchedEffect(userLat, userLon, places, zoomLevel, activePlace) {
+    LaunchedEffect(userLat, userLon, places, isZoomedIn, activePlace) {
         mapView.overlays.clear()
 
         // Add user marker
@@ -223,7 +224,7 @@ fun LeafletMapView(
         }
 
         // Add place attraction markers (Only if zoomed in past threshold for clean Airbnb view)
-        if (zoomLevel >= 11.5) {
+        if (isZoomedIn) {
             places.forEach { place ->
                 if (place.id == activePlace?.id) return@forEach // skip drawing normal marker, we draw it highlighted below!
                 val placePoint = GeoPoint(place.lat, place.lon)
@@ -277,7 +278,7 @@ fun LeafletMapView(
                 it.onDetach() // Cleanup tile downloading on dispose
             }
         )
-        if (zoomLevel < 11.5) {
+        if (!isZoomedIn) {
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
