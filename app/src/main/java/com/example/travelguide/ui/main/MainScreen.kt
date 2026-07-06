@@ -154,6 +154,12 @@ fun LeafletMapView(
             zoomController.setVisibility(org.osmdroid.views.CustomZoomButtonsController.Visibility.NEVER)
             controller.setZoom(15.5)
             isTilesScaledToDpi = true // Crisp, high-resolution rendering
+            addOnAttachStateChangeListener(object : android.view.View.OnAttachStateChangeListener {
+                override fun onViewAttachedToWindow(v: android.view.View) {
+                    v.invalidate()
+                }
+                override fun onViewDetachedFromWindow(v: android.view.View) {}
+            })
         }
     }
 
@@ -922,14 +928,17 @@ fun DashboardView(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        if (activeTab == 0) {
-            // Tab 0: Dedicated Full-Screen Map View
-            Box(
-                modifier = Modifier
+        // Tab 0: Dedicated Full-Screen Map View (Retained in composition tree to preserve zoom level and coordinates)
+        Box(
+            modifier = if (activeTab == 0) {
+                Modifier
                     .weight(1f)
                     .fillMaxWidth()
                     .clipToBounds()
-            ) {
+            } else {
+                Modifier.size(0.dp)
+            }
+        ) {
                 LeafletMapView(
                     userLat = state.currentLocation?.latitude,
                     userLon = state.currentLocation?.longitude,
@@ -1209,7 +1218,8 @@ fun DashboardView(
                     }
                 }
             }
-        } else if (activeTab == 1) {
+
+        if (activeTab == 1) {
             // Tab 1: Discover List View
             LazyColumn(
                 modifier = Modifier
@@ -1287,7 +1297,9 @@ fun DashboardView(
                     }
                 }
             }
-        } else {
+        }
+
+        if (activeTab == 2) {
             // Guide View - Structured to fill screen height efficiently
             Column(
                 modifier = Modifier

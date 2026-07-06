@@ -703,7 +703,8 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                 nearbyPlaces = emptyList(),
                 activePlace = null,
                 guideContent = null,
-                isSpeaking = false
+                isSpeaking = false,
+                settings = it.settings.copy(isGodModeActive = active, interests = "")
             )
         }
         viewModelScope.launch {
@@ -759,6 +760,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun updateGodModeSearchRadius(radiusInKm: Int) {
+        _uiState.update { it.copy(settings = it.settings.copy(godModeSearchRadius = radiusInKm)) }
         viewModelScope.launch {
             settingsRepository.updateSettings { current ->
                 current.copy(godModeSearchRadius = radiusInKm)
@@ -768,6 +770,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun updateSearchRadius(radiusInMeters: Int) {
+        _uiState.update { it.copy(settings = it.settings.copy(searchRadius = radiusInMeters)) }
         viewModelScope.launch {
             settingsRepository.updateSettings { current ->
                 current.copy(searchRadius = radiusInMeters)
