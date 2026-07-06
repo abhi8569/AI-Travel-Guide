@@ -634,7 +634,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         if (_uiState.value.settings.isGodModeActive && _uiState.value.isDatabaseDownloaded) {
             mapDebounceJob?.cancel()
             mapDebounceJob = viewModelScope.launch {
-                delay(300) // Wait for map to settle (idle)
+                delay(50) // Wait for map to settle (idle)
                 val lastQ = lastQueriedLocation
                 val results = FloatArray(1)
                 if (lastQ == null) {

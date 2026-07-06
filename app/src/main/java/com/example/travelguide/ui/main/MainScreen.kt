@@ -975,6 +975,23 @@ fun DashboardView(
                     onMapClick = { onSelectPlaceWithoutNarration(null) }
                 )
 
+                // Dead Center Pin (only in Map Center search mode to indicate calculation center)
+                if (state.useMapCenter) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .offset(y = (-16).dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PinDrop,
+                            contentDescription = "Map Center Target Pin",
+                            tint = primaryGlow,
+                            modifier = Modifier.size(36.dp)
+                        )
+                    }
+                }
+
                 // Floating Controls Card at the Top of Map View
                 Column(
                     modifier = Modifier
@@ -1207,33 +1224,17 @@ fun DashboardView(
                                             fontSize = 13.sp
                                         )
 
-                                        if (state.currentLocation != null) {
-                                            val bearing = calculateBearing(state.currentLocation.latitude, state.currentLocation.longitude, place.lat, place.lon)
-                                            val arrowRotation = (bearing - deviceHeading + 360) % 360
-                                            val cardinal = getCardinalDirection(bearing)
-                                            Row(
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(2.dp),
-                                                modifier = Modifier
-                                                    .clip(RoundedCornerShape(6.dp))
-                                                    .background(Color.White.copy(alpha = 0.05f))
-                                                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Default.Navigation,
-                                                    contentDescription = "Direction Pointer",
-                                                    tint = secondaryGlow,
-                                                    modifier = Modifier
-                                                        .size(10.dp)
-                                                        .rotate(arrowRotation)
-                                                )
-                                                Text(
-                                                    text = cardinal,
-                                                    color = Color.White,
-                                                    fontSize = 10.sp,
-                                                    fontWeight = FontWeight.Bold
-                                                )
-                                            }
+                                        val context = LocalContext.current
+                                        IconButton(
+                                            onClick = { openGoogleMaps(context, place) },
+                                            modifier = Modifier.size(36.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Directions,
+                                                contentDescription = "Get Directions",
+                                                tint = Color.White,
+                                                modifier = Modifier.size(20.dp)
+                                            )
                                         }
                                     }
 
