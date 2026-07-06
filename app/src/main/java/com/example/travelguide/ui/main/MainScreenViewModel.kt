@@ -666,6 +666,8 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun scanMapCenterArea() {
+        _uiState.update { it.copy(useMapCenter = true, locationTrackingActive = false) }
+        lastQueriedLocation = null
         val center = _uiState.value.mapCenterLocation ?: return
         viewModelScope.launch {
             searchPlacesNear(center.latitude, center.longitude, isAutoTrigger = false)
@@ -690,7 +692,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         }
         viewModelScope.launch {
             settingsRepository.updateSettings { current ->
-                current.copy(isGodModeActive = active)
+                current.copy(isGodModeActive = active, interests = "")
             }
             refreshPlacesForCurrentState()
         }

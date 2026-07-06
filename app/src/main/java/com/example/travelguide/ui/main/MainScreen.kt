@@ -97,12 +97,12 @@ fun LeafletMapView(
     currentLayer: String,
     onLayerChanged: (String) -> Unit,
     mapResetTrigger: Int,
+    activePlace: PlaceOfInterest? = null,
     modifier: Modifier = Modifier,
     onMarkerClick: (PlaceOfInterest) -> Unit = {},
     onMapCenterChanged: (Double, Double) -> Unit = { _, _ -> }
 ) {
     val context = LocalContext.current
-    var overlappingPlacesToSelect by remember { mutableStateOf<List<PlaceOfInterest>?>(null) }
 
     // 1. Create a beautiful native user location marker icon (Teal circle with white border)
     val userMarkerIcon = remember {
@@ -121,6 +121,16 @@ fun LeafletMapView(
             setColor(android.graphics.Color.parseColor("#6200EE")) // Purple theme accent
             setStroke(4, android.graphics.Color.WHITE)
             setSize(32, 32)
+        }
+    }
+
+    // 3. Highlighted active selected place marker icon (Neon pink circle with white border)
+    val activePlaceMarkerIcon = remember {
+        android.graphics.drawable.GradientDrawable().apply {
+            shape = android.graphics.drawable.GradientDrawable.OVAL
+            setColor(android.graphics.Color.parseColor("#FF007F")) // Highlight Pink
+            setStroke(5, android.graphics.Color.WHITE)
+            setSize(42, 42)
         }
     }
 
@@ -197,7 +207,7 @@ fun LeafletMapView(
     }
 
     // Handle state updates natively and map updates smoothly on UI thread
-    LaunchedEffect(userLat, userLon, places, zoomLevel) {
+    LaunchedEffect(userLat, userLon, places, zoomLevel, activePlace) {
         mapView.overlays.clear()
 
         // Add user marker
@@ -215,6 +225,7 @@ fun LeafletMapView(
         // Add place attraction markers (Only if zoomed in past threshold for clean Airbnb view)
         if (zoomLevel >= 11.5) {
             places.forEach { place ->
+                if (place.id == activePlace?.id) return@forEach // skip drawing normal marker, we draw it highlighted below!
                 val placePoint = GeoPoint(place.lat, place.lon)
                 val placeMarker = Marker(mapView).apply {
                     position = placePoint
@@ -223,25 +234,31 @@ fun LeafletMapView(
                     subDescription = place.category
                     icon = placeMarkerIcon
                     setOnMarkerClickListener { marker, map ->
-                        val results = FloatArray(1)
-                        val nearbySpots = places.filter { other ->
-                            if (other.id == place.id) true
-                            else {
-                                android.location.Location.distanceBetween(place.lat, place.lon, other.lat, other.lon, results)
-                                results[0] <= 30f // 30 meters threshold
-                            }
-                        }
-                        if (nearbySpots.size > 1) {
-                            overlappingPlacesToSelect = nearbySpots
-                        } else {
-                            onMarkerClick(place)
-                            marker.showInfoWindow()
-                        }
+                        onMarkerClick(place)
+                        marker.showInfoWindow()
                         true
                     }
                 }
                 mapView.overlays.add(placeMarker)
             }
+        }
+
+        // Always add the active selected place marker if it exists so it never disappears on zoom/pan
+        if (activePlace != null) {
+            val activePoint = GeoPoint(activePlace.lat, activePlace.lon)
+            val activeMarker = Marker(mapView).apply {
+                position = activePoint
+                setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                title = activePlace.name
+                subDescription = activePlace.category
+                icon = activePlaceMarkerIcon
+                setOnMarkerClickListener { marker, map ->
+                    onMarkerClick(activePlace)
+                    marker.showInfoWindow()
+                    true
+                }
+            }
+            mapView.overlays.add(activeMarker)
         }
 
         mapView.invalidate() // Native redraw invocation
@@ -328,82 +345,6 @@ fun LeafletMapView(
                 }
             }
         }
-    }
-
-    if (overlappingPlacesToSelect != null) {
-        val dialogTextColor = if (cardBgColor == Color.White) Color(0xFF1C1B1F) else Color.White
-        val dialogSubTextColor = if (cardBgColor == Color.White) Color(0xFF6B6A7A) else Color.LightGray
-        AlertDialog(
-            onDismissRequest = { overlappingPlacesToSelect = null },
-            title = {
-                Text(
-                    text = "Multiple spots found here",
-                    color = dialogTextColor,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp
-                )
-            },
-            text = {
-                Column(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Text(
-                        text = "Several points of interest are very close together. Select which one you want to inspect:",
-                        color = dialogSubTextColor,
-                        fontSize = 13.sp
-                    )
-                    LazyColumn(
-                        modifier = Modifier.fillMaxWidth().heightIn(max = 200.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(overlappingPlacesToSelect!!) { spot ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(cardBgColor.copy(alpha = 0.5f))
-                                    .clickable {
-                                        onMarkerClick(spot)
-                                        overlappingPlacesToSelect = null
-                                    }
-                                    .padding(12.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = spot.name,
-                                        color = dialogTextColor,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 14.sp
-                                    )
-                                    Text(
-                                        text = spot.category,
-                                        color = Color.Gray,
-                                        fontSize = 11.sp
-                                    )
-                                }
-                                Text(
-                                    text = String.format("%.0fm", spot.distance),
-                                    color = secondaryGlow,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 12.sp
-                                )
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = {},
-            dismissButton = {
-                TextButton(onClick = { overlappingPlacesToSelect = null }) {
-                    Text("Cancel", color = Color.Gray)
-                }
-            },
-            containerColor = cardBgColor,
-            shape = RoundedCornerShape(16.dp)
-        )
     }
 }
 
@@ -681,19 +622,6 @@ fun MainScreen(
                     Spacer(modifier = Modifier.width(8.dp))
 
                     IconButton(
-                        onClick = { viewModel.refreshPlacesManually() },
-                        colors = IconButtonDefaults.iconButtonColors(containerColor = cardBgColor)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Refresh,
-                            contentDescription = "Refresh Places",
-                            tint = textColor
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    IconButton(
                         onClick = { showSettings = !showSettings },
                         colors = IconButtonDefaults.iconButtonColors(
                             containerColor = if (showSettings) primaryGlow else cardBgColor
@@ -941,7 +869,7 @@ fun DashboardView(
             Tab(
                 selected = activeTab == 1,
                 onClick = { activeTab = 1 },
-                icon = { Icon(Icons.Default.Explore, contentDescription = "List View", modifier = Modifier.size(20.dp)) }
+                icon = { Icon(Icons.Default.FormatListBulleted, contentDescription = "List View", modifier = Modifier.size(20.dp)) }
             )
             Tab(
                 selected = activeTab == 2,
@@ -966,6 +894,7 @@ fun DashboardView(
                     currentLayer = state.settings.mapLayer,
                     onLayerChanged = onLayerChanged,
                     mapResetTrigger = state.mapResetTrigger,
+                    activePlace = state.activePlace,
                     modifier = Modifier.fillMaxSize(),
                     onMarkerClick = { place ->
                         onSelectPlaceWithoutNarration(place)
@@ -973,27 +902,183 @@ fun DashboardView(
                     onMapCenterChanged = onMapCenterChanged
                 )
 
-                // Search Mode Selection Toggle Floating overlay
-                Row(
+                // Floating Controls Card at the Top of Map View
+                Column(
                     modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(12.dp)
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(Color(0xFF1F1D2C).copy(alpha = 0.85f))
-                        .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(20.dp))
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .align(Alignment.TopCenter)
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text("Search Mode: ", color = Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    Text(
-                        text = if (state.useMapCenter) "Map Center" else "GPS Location",
-                        color = secondaryGlow,
-                        fontWeight = FontWeight.ExtraBold,
-                        fontSize = 11.sp,
-                        modifier = Modifier.clickable {
-                            onToggleMapSearchMode()
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // 1. Search Mode selection toggle (floating overlay)
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(cardBgColor.copy(alpha = 0.85f))
+                                .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(20.dp))
+                                .padding(horizontal = 12.dp, vertical = 8.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("Mode: ", color = Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text(
+                                    text = if (state.useMapCenter) "Map Center" else "GPS Location",
+                                    color = secondaryGlow,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 11.sp,
+                                    modifier = Modifier.clickable { onToggleMapSearchMode() }
+                                )
+                            }
                         }
+
+                        // 2. Expandable Filter / Radius toggle button!
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(if (showFiltersPanel) primaryGlow else cardBgColor.copy(alpha = 0.85f))
+                                .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(20.dp))
+                                .clickable { showFiltersPanel = !showFiltersPanel }
+                                .padding(horizontal = 12.dp, vertical = 8.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(Icons.Default.Tune, contentDescription = null, modifier = Modifier.size(12.dp), tint = if (showFiltersPanel) Color.White else secondaryGlow)
+                                Text("Filters", color = if (showFiltersPanel) Color.White else textColor, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+
+                    // 3. Location Search Bar (Always in Map View!)
+                    var searchQuery by remember { mutableStateOf("") }
+                    val keyboardController = LocalSoftwareKeyboardController.current
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        placeholder = { Text("Search city, attraction or place...", color = Color.Gray, fontSize = 13.sp) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        trailingIcon = {
+                            IconButton(
+                                onClick = {
+                                    if (searchQuery.isNotBlank()) {
+                                        onSearchCustomLocation(searchQuery)
+                                        keyboardController?.hide()
+                                    }
+                                }
+                            ) {
+                                Icon(imageVector = Icons.Default.Search, contentDescription = "Search Location", tint = secondaryGlow)
+                            }
+                        },
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        keyboardActions = KeyboardActions(onSearch = {
+                            if (searchQuery.isNotBlank()) {
+                                onSearchCustomLocation(searchQuery)
+                                keyboardController?.hide()
+                            }
+                        }),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = textColor,
+                            unfocusedTextColor = textColor,
+                            focusedBorderColor = secondaryGlow,
+                            unfocusedBorderColor = textColor.copy(alpha = 0.15f),
+                            focusedContainerColor = cardBgColor.copy(alpha = 0.9f),
+                            unfocusedContainerColor = cardBgColor.copy(alpha = 0.9f)
+                        ),
+                        shape = RoundedCornerShape(12.dp)
                     )
+
+                    // 4. Expanded Filter & Radius panel!
+                    if (showFiltersPanel) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = cardBgColor.copy(alpha = 0.95f)),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, primaryGlow.copy(alpha = 0.15f)),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                if (state.settings.isGodModeActive) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text("GOD MODE SEARCH RADIUS", color = Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        Text("${state.settings.godModeSearchRadius} km", color = primaryGlow, fontWeight = FontWeight.ExtraBold, fontSize = 14.sp)
+                                    }
+                                    Slider(
+                                        value = state.settings.godModeSearchRadius.toFloat(),
+                                        onValueChange = { vm.updateGodModeSearchRadius(it.toInt()) },
+                                        valueRange = 1f..50f,
+                                        steps = 49,
+                                        colors = SliderDefaults.colors(thumbColor = primaryGlow, activeTrackColor = primaryGlow, inactiveTrackColor = textColor.copy(alpha = 0.15f))
+                                    )
+                                } else {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text("SEARCH RADIUS", color = Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        Text("${state.settings.searchRadius} meters", color = primaryGlow, fontWeight = FontWeight.ExtraBold, fontSize = 14.sp)
+                                    }
+                                    Slider(
+                                        value = state.settings.searchRadius.toFloat(),
+                                        onValueChange = { vm.updateSearchRadius(it.toInt()) },
+                                        valueRange = 100f..5000f,
+                                        steps = 49,
+                                        colors = SliderDefaults.colors(thumbColor = primaryGlow, activeTrackColor = primaryGlow, inactiveTrackColor = textColor.copy(alpha = 0.15f))
+                                    )
+                                }
+
+                                if (state.availableInterests.isNotEmpty()) {
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text("FILTER BY TOPICS", color = Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                            Text("Select All", color = secondaryGlow, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clickable { onInterestsChange("") })
+                                            Text("Clear All", color = Color.LightGray, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clickable { onInterestsChange(state.availableInterests.joinToString(",")) })
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    FlowRow(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        val activeInterests = state.settings.interests.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+                                        state.availableInterests.forEach { interest ->
+                                            val isSelected = !activeInterests.contains(interest)
+                                            FilterChip(
+                                                selected = isSelected,
+                                                onClick = {
+                                                    val newDisabledList = if (isSelected) activeInterests + interest else activeInterests.filter { it != interest }
+                                                    onInterestsChange(newDisabledList.joinToString(","))
+                                                },
+                                                label = { Text(interest, fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                                                colors = FilterChipDefaults.filterChipColors(
+                                                    selectedContainerColor = primaryGlow,
+                                                    selectedLabelColor = Color.White,
+                                                    labelColor = textColor.copy(alpha = 0.8f),
+                                                    containerColor = cardBgColor.copy(alpha = 0.5f)
+                                                )
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
 
                 // Stacked Controls Column at the bottom center to prevent overlaps
@@ -1005,18 +1090,16 @@ fun DashboardView(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // Scan Area Button Floating overlay (Only shown in Map Center Mode)
-                    if (state.useMapCenter) {
-                        Button(
-                            onClick = { onScanMapCenterArea() },
-                            colors = ButtonDefaults.buttonColors(containerColor = primaryGlow),
-                            shape = RoundedCornerShape(20.dp),
-                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
-                        ) {
-                            Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color.White)
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Scan this Area", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                        }
+                    // Scan Area Button Floating overlay (Always visible in Map View to allow manual scan & force refresh)
+                    Button(
+                        onClick = { onScanMapCenterArea() },
+                        colors = ButtonDefaults.buttonColors(containerColor = primaryGlow),
+                        shape = RoundedCornerShape(20.dp),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                    ) {
+                        Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color.White)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Scan this Area", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
                     }
 
                     // Floating Detailed Card at bottom of map for active spot selection
@@ -1084,236 +1167,6 @@ fun DashboardView(
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Geocoding Search Bar to search other places/cities
-                item {
-                    var searchQuery by remember { mutableStateOf("") }
-                    val keyboardController = LocalSoftwareKeyboardController.current
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = { searchQuery = it },
-                        placeholder = { Text("Search city, attraction or place...", color = Color.Gray, fontSize = 13.sp) },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        trailingIcon = {
-                            IconButton(
-                                onClick = {
-                                    if (searchQuery.isNotBlank()) {
-                                        onSearchCustomLocation(searchQuery)
-                                        keyboardController?.hide()
-                                    }
-                                }
-                            ) {
-                                Icon(imageVector = Icons.Default.Search, contentDescription = "Search Location", tint = secondaryGlow)
-                            }
-                        },
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                        keyboardActions = KeyboardActions(onSearch = {
-                            if (searchQuery.isNotBlank()) {
-                                onSearchCustomLocation(searchQuery)
-                                keyboardController?.hide()
-                            }
-                        }),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = textColor,
-                            unfocusedTextColor = textColor,
-                            focusedBorderColor = secondaryGlow,
-                            unfocusedBorderColor = textColor.copy(alpha = 0.15f)
-                        )
-                    )
-                }
-
-                // Collapsible Search Radius & Filter configuration Header
-                item {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(cardBgColor)
-                            .clickable { showFiltersPanel = !showFiltersPanel }
-                            .padding(horizontal = 14.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Tune,
-                                contentDescription = "Filters",
-                                tint = secondaryGlow,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Search Radius & Topic Filters",
-                                color = textColor,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 13.sp
-                            )
-                        }
-                        Icon(
-                            imageVector = if (showFiltersPanel) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                            contentDescription = "Toggle",
-                            tint = textColor,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                }
-
-                if (showFiltersPanel) {
-                    // Search Radius Slider (Dynamic: God Mode or Standard Mode)
-                    item {
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp),
-                            colors = CardDefaults.cardColors(containerColor = cardBgColor.copy(alpha = 0.5f)),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, primaryGlow.copy(alpha = 0.15f)),
-                            shape = RoundedCornerShape(16.dp)
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                if (state.settings.isGodModeActive) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(
-                                            text = "GOD MODE SEARCH RADIUS",
-                                            color = Color.Gray,
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                        Text(
-                                            text = "${state.settings.godModeSearchRadius} km",
-                                            color = primaryGlow,
-                                            fontWeight = FontWeight.ExtraBold,
-                                            fontSize = 14.sp
-                                        )
-                                    }
-                                    Slider(
-                                        value = state.settings.godModeSearchRadius.toFloat(),
-                                        onValueChange = { vm.updateGodModeSearchRadius(it.toInt()) },
-                                        valueRange = 1f..50f,
-                                        steps = 49,
-                                        colors = SliderDefaults.colors(
-                                            thumbColor = primaryGlow,
-                                            activeTrackColor = primaryGlow,
-                                            inactiveTrackColor = textColor.copy(alpha = 0.15f)
-                                        )
-                                    )
-                                } else {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(
-                                            text = "SEARCH RADIUS",
-                                            color = Color.Gray,
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                        Text(
-                                            text = "${state.settings.searchRadius} meters",
-                                            color = primaryGlow,
-                                            fontWeight = FontWeight.ExtraBold,
-                                            fontSize = 14.sp
-                                        )
-                                    }
-                                    Slider(
-                                        value = state.settings.searchRadius.toFloat(),
-                                        onValueChange = { vm.updateSearchRadius(it.toInt()) },
-                                        valueRange = 100f..5000f,
-                                        steps = 49,
-                                        colors = SliderDefaults.colors(
-                                            thumbColor = primaryGlow,
-                                            activeTrackColor = primaryGlow,
-                                            inactiveTrackColor = textColor.copy(alpha = 0.15f)
-                                        )
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    // Dynamic Interests Filter Row - populated from raw Overpass response
-                    if (state.availableInterests.isNotEmpty()) {
-                        item {
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 4.dp),
-                                colors = CardDefaults.cardColors(containerColor = cardBgColor.copy(alpha = 0.5f)),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, primaryGlow.copy(alpha = 0.15f)),
-                                shape = RoundedCornerShape(16.dp)
-                            ) {
-                                Column(modifier = Modifier.padding(16.dp)) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(
-                                            text = "FILTER BY TOPICS",
-                                            color = Color.Gray,
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                            Text(
-                                                text = "Select All",
-                                                color = secondaryGlow,
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                modifier = Modifier.clickable {
-                                                    onInterestsChange("") // Clears blacklist, enabling all
-                                                }
-                                            )
-                                            Text(
-                                                text = "Clear All",
-                                                color = Color.LightGray,
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                modifier = Modifier.clickable {
-                                                    onInterestsChange(state.availableInterests.joinToString(",")) // Disables all
-                                                }
-                                            )
-                                        }
-                                    }
-                                    FlowRow(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                                    ) {
-                                        val interestsList = state.availableInterests
-                                        val activeInterests = state.settings.interests.split(",").map { it.trim() }.filter { it.isNotEmpty() }
-
-                                        interestsList.forEach { interest ->
-                                            val isSelected = !activeInterests.contains(interest)
-                                            FilterChip(
-                                                selected = isSelected,
-                                                onClick = {
-                                                    val newDisabledList = if (isSelected) {
-                                                        activeInterests + interest
-                                                    } else {
-                                                        activeInterests.filter { it != interest }
-                                                    }
-                                                    onInterestsChange(newDisabledList.joinToString(","))
-                                                },
-                                                label = { Text(interest, fontSize = 11.sp, fontWeight = FontWeight.Bold) },
-                                                colors = FilterChipDefaults.filterChipColors(
-                                                    selectedContainerColor = primaryGlow,
-                                                    selectedLabelColor = Color.White,
-                                                    containerColor = Color.White.copy(alpha = 0.05f),
-                                                    labelColor = Color.LightGray
-                                                )
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
 
                 // Nearby Places Section
                 item {
@@ -1330,7 +1183,7 @@ fun DashboardView(
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = "NEARBY PLACES (${state.nearbyPlaces.size})",
-                            color = Color.White,
+                            color = textColor,
                             fontWeight = FontWeight.Bold,
                             fontSize = 14.sp
                         )
