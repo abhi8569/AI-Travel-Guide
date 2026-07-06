@@ -10,6 +10,7 @@ import io.ktor.client.statement.*
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
 data class TourGuideUiState(
     val settings: TourGuideSettings = TourGuideSettings(
@@ -68,6 +69,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     val uiState: StateFlow<TourGuideUiState> = _uiState.asStateFlow()
 
     private var locationJob: Job? = null
+    private var mapDebounceJob: Job? = null
     private val narratedPlaceIds = mutableSetOf<String>()
     private var lastNarrationTime = 0L
     private val guideCache = mutableMapOf<String, String>() // Local cache to save API bills
@@ -628,20 +630,20 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
             settingsRepository.updateLastLocation(lat, lon)
         }
 
-        // Auto-fetch local Atlas Obscura places dynamically as user pans the map (Airbnb pattern)
+        // Debounce database queries to prevent database spam and layout flickering while panning/zooming
         if (_uiState.value.settings.isGodModeActive && _uiState.value.isDatabaseDownloaded) {
-            val lastQ = lastQueriedLocation
-            val results = FloatArray(1)
-            if (lastQ == null) {
-                lastQueriedLocation = UserLocation(lat, lon, 0f)
-                viewModelScope.launch {
-                    searchPlacesNear(lat, lon, isAutoTrigger = true)
-                }
-            } else {
-                android.location.Location.distanceBetween(lastQ.latitude, lastQ.longitude, lat, lon, results)
-                if (results[0] >= 150f) { // Re-fetch only after panning more than 150 meters to prevent DB spam
+            mapDebounceJob?.cancel()
+            mapDebounceJob = viewModelScope.launch {
+                delay(300) // Wait for map to settle (idle)
+                val lastQ = lastQueriedLocation
+                val results = FloatArray(1)
+                if (lastQ == null) {
                     lastQueriedLocation = UserLocation(lat, lon, 0f)
-                    viewModelScope.launch {
+                    searchPlacesNear(lat, lon, isAutoTrigger = true)
+                } else {
+                    android.location.Location.distanceBetween(lastQ.latitude, lastQ.longitude, lat, lon, results)
+                    if (results[0] >= 150f) { // Re-fetch only after panning more than 150 meters
+                        lastQueriedLocation = UserLocation(lat, lon, 0f)
                         searchPlacesNear(lat, lon, isAutoTrigger = true)
                     }
                 }

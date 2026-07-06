@@ -190,16 +190,20 @@ fun LeafletMapView(
     DisposableEffect(mapView) {
         val listener = object : org.osmdroid.events.MapListener {
             override fun onScroll(event: org.osmdroid.events.ScrollEvent?): Boolean {
-                val center = mapView.mapCenter
-                lastCenter = GeoPoint(center.latitude, center.longitude)
-                onMapCenterChanged(center.latitude, center.longitude)
+                mapView.post {
+                    val center = mapView.mapCenter
+                    lastCenter = GeoPoint(center.latitude, center.longitude)
+                    onMapCenterChanged(center.latitude, center.longitude)
+                }
                 return true
             }
             override fun onZoom(event: org.osmdroid.events.ZoomEvent?): Boolean {
-                val center = mapView.mapCenter
-                lastCenter = GeoPoint(center.latitude, center.longitude)
-                zoomLevel = mapView.zoomLevelDouble
-                onMapCenterChanged(center.latitude, center.longitude)
+                mapView.post {
+                    val center = mapView.mapCenter
+                    lastCenter = GeoPoint(center.latitude, center.longitude)
+                    zoomLevel = mapView.zoomLevelDouble
+                    onMapCenterChanged(center.latitude, center.longitude)
+                }
                 return true
             }
         }
@@ -918,7 +922,11 @@ fun DashboardView(
 
         if (activeTab == 0) {
             // Tab 0: Dedicated Full-Screen Map View
-            Box(modifier = Modifier.fillMaxSize()) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+            ) {
                 LeafletMapView(
                     userLat = state.currentLocation?.latitude,
                     userLon = state.currentLocation?.longitude,
