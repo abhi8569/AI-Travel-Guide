@@ -635,7 +635,7 @@ fun MainScreen(
                     Text(
                         text = "AI TOUR GUIDE",
                         color = textColor,
-                        fontSize = 24.sp,
+                        fontSize = 18.sp,
                         fontWeight = FontWeight.ExtraBold,
                         letterSpacing = 1.5.sp
                     )
@@ -1178,16 +1178,18 @@ fun DashboardView(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // Scan Area Button Floating overlay (Always visible in Map View to allow manual scan & force refresh)
-                    Button(
-                        onClick = { onScanMapCenterArea() },
-                        colors = ButtonDefaults.buttonColors(containerColor = primaryGlow),
-                        shape = RoundedCornerShape(20.dp),
-                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
-                    ) {
-                        Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color.White)
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Scan this Area", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    // Scan Area Button Floating overlay (Visible only when no spot is selected to maximize map space)
+                    if (state.activePlace == null) {
+                        Button(
+                            onClick = { onScanMapCenterArea() },
+                            colors = ButtonDefaults.buttonColors(containerColor = primaryGlow),
+                            shape = RoundedCornerShape(20.dp),
+                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                        ) {
+                            Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color.White)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Scan this Area", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        }
                     }
 
                     // Floating Detailed Card at bottom of map for active spot selection
