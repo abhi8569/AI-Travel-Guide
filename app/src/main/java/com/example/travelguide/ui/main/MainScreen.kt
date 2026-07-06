@@ -231,10 +231,8 @@ fun LeafletMapView(
     }
 
     val currentOnMapClick by rememberUpdatedState(onMapClick)
-    val isZoomedIn = zoomLevel >= 11.5
-
     // Handle state updates natively and map updates smoothly on UI thread
-    LaunchedEffect(userLat, userLon, places, isZoomedIn, activePlace) {
+    LaunchedEffect(userLat, userLon, places, activePlace) {
         mapView.overlays.clear()
         org.osmdroid.views.overlay.infowindow.InfoWindow.closeAllInfoWindowsOn(mapView)
 
@@ -262,25 +260,23 @@ fun LeafletMapView(
             mapView.overlays.add(userMarker)
         }
 
-        // Add place attraction markers (Only if zoomed in past threshold for clean Airbnb view)
-        if (isZoomedIn) {
-            places.forEach { place ->
-                if (place.id == activePlace?.id) return@forEach // skip drawing normal marker, we draw it highlighted below!
-                val placePoint = GeoPoint(place.lat, place.lon)
-                val placeMarker = Marker(mapView).apply {
-                    position = placePoint
-                    setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
-                    title = place.name
-                    subDescription = place.category
-                    icon = placeMarkerIcon
-                    setOnMarkerClickListener { marker, map ->
-                        onMarkerClick(place)
-                        marker.showInfoWindow()
-                        true
-                    }
+        // Add place attraction markers (Always draw all points for simple, clean, non-flickering standard style)
+        places.forEach { place ->
+            if (place.id == activePlace?.id) return@forEach // skip drawing normal marker, we draw it highlighted below!
+            val placePoint = GeoPoint(place.lat, place.lon)
+            val placeMarker = Marker(mapView).apply {
+                position = placePoint
+                setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                title = place.name
+                subDescription = place.category
+                icon = placeMarkerIcon
+                setOnMarkerClickListener { marker, map ->
+                    onMarkerClick(place)
+                    marker.showInfoWindow()
+                    true
                 }
-                mapView.overlays.add(placeMarker)
             }
+            mapView.overlays.add(placeMarker)
         }
 
         // Always add the active selected place marker if it exists so it never disappears on zoom/pan
@@ -316,24 +312,6 @@ fun LeafletMapView(
                 it.onDetach() // Cleanup tile downloading on dispose
             }
         )
-        if (!isZoomedIn) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 16.dp)
-                    .clip(RoundedCornerShape(50))
-                    .background(Color(0xFF1F1D2C).copy(alpha = 0.9f))
-                    .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(50))
-                    .padding(horizontal = 14.dp, vertical = 6.dp)
-            ) {
-                Text(
-                    text = "🔍 Zoom in to view spots",
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 11.sp
-                )
-            }
-        }
         // Floating overlay controls
         Column(
             modifier = Modifier
