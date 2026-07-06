@@ -91,15 +91,18 @@ fun LeafletMapView(
     userLon: Double?,
     places: List<PlaceOfInterest>,
     cardBgColor: Color,
+    secondaryGlow: Color,
     initialCenterLat: Double?,
     initialCenterLon: Double?,
     currentLayer: String,
     onLayerChanged: (String) -> Unit,
+    mapResetTrigger: Int,
     modifier: Modifier = Modifier,
     onMarkerClick: (PlaceOfInterest) -> Unit = {},
     onMapCenterChanged: (Double, Double) -> Unit = { _, _ -> }
 ) {
     val context = LocalContext.current
+    var overlappingPlacesToSelect by remember { mutableStateOf<List<PlaceOfInterest>?>(null) }
 
     // 1. Create a beautiful native user location marker icon (Teal circle with white border)
     val userMarkerIcon = remember {
@@ -182,16 +185,12 @@ fun LeafletMapView(
         }
     }
 
-    // Centering viewport: auto-restore or snap only when coordinates change significantly from last panned coordinate
-    LaunchedEffect(initialCenterLat, initialCenterLon) {
+    // Centering viewport: snap map center only when a programmatic reset is triggered from outside
+    LaunchedEffect(mapResetTrigger) {
         if (initialCenterLat != null && initialCenterLon != null) {
             val target = GeoPoint(initialCenterLat, initialCenterLon)
-            if (lastCenter == null || 
-                Math.abs(lastCenter!!.latitude - initialCenterLat) > 0.0001 || 
-                Math.abs(lastCenter!!.longitude - initialCenterLon) > 0.0001) {
-                lastCenter = target
-                mapView.controller.setCenter(target)
-            }
+            lastCenter = target
+            mapView.controller.setCenter(target)
         }
     }
 
@@ -221,8 +220,20 @@ fun LeafletMapView(
                 subDescription = place.category
                 icon = placeMarkerIcon
                 setOnMarkerClickListener { marker, map ->
-                    onMarkerClick(place)
-                    marker.showInfoWindow()
+                    val results = FloatArray(1)
+                    val nearbySpots = places.filter { other ->
+                        if (other.id == place.id) true
+                        else {
+                            android.location.Location.distanceBetween(place.lat, place.lon, other.lat, other.lon, results)
+                            results[0] <= 30f // 30 meters threshold
+                        }
+                    }
+                    if (nearbySpots.size > 1) {
+                        overlappingPlacesToSelect = nearbySpots
+                    } else {
+                        onMarkerClick(place)
+                        marker.showInfoWindow()
+                    }
                     true
                 }
             }
@@ -296,6 +307,80 @@ fun LeafletMapView(
                 }
             }
         }
+    }
+
+    if (overlappingPlacesToSelect != null) {
+        AlertDialog(
+            onDismissRequest = { overlappingPlacesToSelect = null },
+            title = {
+                Text(
+                    text = "Multiple spots found here",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp
+                )
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "Several points of interest are very close together. Select which one you want to inspect:",
+                        color = Color.LightGray,
+                        fontSize = 13.sp
+                    )
+                    LazyColumn(
+                        modifier = Modifier.fillMaxWidth().heightIn(max = 200.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(overlappingPlacesToSelect!!) { spot ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(cardBgColor.copy(alpha = 0.5f))
+                                    .clickable {
+                                        onMarkerClick(spot)
+                                        overlappingPlacesToSelect = null
+                                    }
+                                    .padding(12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = spot.name,
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp
+                                    )
+                                    Text(
+                                        text = spot.category,
+                                        color = Color.Gray,
+                                        fontSize = 11.sp
+                                    )
+                                }
+                                Text(
+                                    text = String.format("%.0fm", spot.distance),
+                                    color = secondaryGlow,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 12.sp
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { overlappingPlacesToSelect = null }) {
+                    Text("Cancel", color = Color.Gray)
+                }
+            },
+            containerColor = cardBgColor,
+            shape = RoundedCornerShape(16.dp)
+        )
     }
 }
 
@@ -787,6 +872,7 @@ fun DashboardView(
     vm: MainScreenViewModel
 ) {
     var activeTab by remember { mutableIntStateOf(0) } // 0: Map, 1: Discover, 2: Audio Guide
+    var showFiltersPanel by remember { mutableStateOf(false) }
 
     // Auto-switch to Audio Guide tab ONLY when narration is active or is generating
     LaunchedEffect(state.guideContent, state.isGeneratingGuide) {
@@ -841,10 +927,12 @@ fun DashboardView(
                     userLon = state.currentLocation?.longitude,
                     places = state.nearbyPlaces,
                     cardBgColor = cardBgColor,
+                    secondaryGlow = secondaryGlow,
                     initialCenterLat = state.mapCenterLocation?.latitude ?: state.currentLocation?.latitude ?: 50.7333,
                     initialCenterLon = state.mapCenterLocation?.longitude ?: state.currentLocation?.longitude ?: 7.1000,
                     currentLayer = state.settings.mapLayer,
                     onLayerChanged = onLayerChanged,
+                    mapResetTrigger = state.mapResetTrigger,
                     modifier = Modifier.fillMaxSize(),
                     onMarkerClick = { place ->
                         onSelectPlaceWithoutNarration(place)
@@ -963,52 +1051,6 @@ fun DashboardView(
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // God Mode Search Radius Slider (shown only when God Mode is active)
-                if (state.settings.isGodModeActive) {
-                    item {
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp),
-                            colors = CardDefaults.cardColors(containerColor = cardBgColor.copy(alpha = 0.5f)),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, primaryGlow.copy(alpha = 0.15f)),
-                            shape = RoundedCornerShape(16.dp)
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = "GOD MODE SEARCH RADIUS",
-                                        color = Color.Gray,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = "${state.settings.godModeSearchRadius} km",
-                                        color = primaryGlow,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        fontSize = 14.sp
-                                    )
-                                }
-                                Slider(
-                                    value = state.settings.godModeSearchRadius.toFloat(),
-                                    onValueChange = { vm.updateGodModeSearchRadius(it.toInt()) },
-                                    valueRange = 1f..50f,
-                                    steps = 49,
-                                    colors = SliderDefaults.colors(
-                                        thumbColor = primaryGlow,
-                                        activeTrackColor = primaryGlow,
-                                        inactiveTrackColor = Color.White.copy(alpha = 0.1f)
-                                    )
-                                )
-                            }
-                        }
-                    }
-                }
-
                 // Geocoding Search Bar to search other places/cities
                 item {
                     var searchQuery by remember { mutableStateOf("") }
@@ -1047,70 +1089,193 @@ fun DashboardView(
                     )
                 }
 
-                // Dynamic Interests Filter Row - populated from raw Overpass response
-                if (state.availableInterests.isNotEmpty()) {
+                // Collapsible Search Radius & Filter configuration Header
+                item {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(cardBgColor)
+                            .clickable { showFiltersPanel = !showFiltersPanel }
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Tune,
+                                contentDescription = "Filters",
+                                tint = secondaryGlow,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Search Radius & Topic Filters",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp
+                            )
+                        }
+                        Icon(
+                            imageVector = if (showFiltersPanel) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                            contentDescription = "Toggle",
+                            tint = Color.LightGray,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+
+                if (showFiltersPanel) {
+                    // Search Radius Slider (Dynamic: God Mode or Standard Mode)
                     item {
-                        Column {
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = "FILTER BY TOPICS",
-                                    color = Color.Gray,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                    Text(
-                                        text = "Select All",
-                                        color = secondaryGlow,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.clickable {
-                                            onInterestsChange("") // Clears blacklist, enabling all
-                                        }
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            colors = CardDefaults.cardColors(containerColor = cardBgColor.copy(alpha = 0.5f)),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, primaryGlow.copy(alpha = 0.15f)),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                if (state.settings.isGodModeActive) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "GOD MODE SEARCH RADIUS",
+                                            color = Color.Gray,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            text = "${state.settings.godModeSearchRadius} km",
+                                            color = primaryGlow,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            fontSize = 14.sp
+                                        )
+                                    }
+                                    Slider(
+                                        value = state.settings.godModeSearchRadius.toFloat(),
+                                        onValueChange = { vm.updateGodModeSearchRadius(it.toInt()) },
+                                        valueRange = 1f..50f,
+                                        steps = 49,
+                                        colors = SliderDefaults.colors(
+                                            thumbColor = primaryGlow,
+                                            activeTrackColor = primaryGlow,
+                                            inactiveTrackColor = Color.White.copy(alpha = 0.1f)
+                                        )
                                     )
-                                    Text(
-                                        text = "Clear All",
-                                        color = Color.LightGray,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.clickable {
-                                            onInterestsChange(state.availableInterests.joinToString(",")) // Disables all
-                                        }
+                                } else {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "SEARCH RADIUS",
+                                            color = Color.Gray,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            text = "${state.settings.searchRadius} meters",
+                                            color = primaryGlow,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            fontSize = 14.sp
+                                        )
+                                    }
+                                    Slider(
+                                        value = state.settings.searchRadius.toFloat(),
+                                        onValueChange = { vm.updateSearchRadius(it.toInt()) },
+                                        valueRange = 100f..5000f,
+                                        steps = 49,
+                                        colors = SliderDefaults.colors(
+                                            thumbColor = primaryGlow,
+                                            activeTrackColor = primaryGlow,
+                                            inactiveTrackColor = Color.White.copy(alpha = 0.1f)
+                                        )
                                     )
                                 }
                             }
-                            FlowRow(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                val interestsList = state.availableInterests
-                                val activeInterests = state.settings.interests.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+                        }
+                    }
 
-                                interestsList.forEach { interest ->
-                                    val isSelected = !activeInterests.contains(interest)
-                                    FilterChip(
-                                        selected = isSelected,
-                                        onClick = {
-                                            val newDisabledList = if (isSelected) {
-                                                activeInterests + interest
-                                            } else {
-                                                activeInterests.filter { it != interest }
-                                            }
-                                            onInterestsChange(newDisabledList.joinToString(","))
-                                        },
-                                        label = { Text(interest, fontSize = 11.sp, fontWeight = FontWeight.Bold) },
-                                        colors = FilterChipDefaults.filterChipColors(
-                                            selectedContainerColor = primaryGlow,
-                                            selectedLabelColor = Color.White,
-                                            containerColor = Color.White.copy(alpha = 0.05f),
-                                            labelColor = Color.LightGray
+                    // Dynamic Interests Filter Row - populated from raw Overpass response
+                    if (state.availableInterests.isNotEmpty()) {
+                        item {
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                colors = CardDefaults.cardColors(containerColor = cardBgColor.copy(alpha = 0.5f)),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, primaryGlow.copy(alpha = 0.15f)),
+                                shape = RoundedCornerShape(16.dp)
+                            ) {
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "FILTER BY TOPICS",
+                                            color = Color.Gray,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold
                                         )
-                                    )
+                                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                            Text(
+                                                text = "Select All",
+                                                color = secondaryGlow,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.clickable {
+                                                    onInterestsChange("") // Clears blacklist, enabling all
+                                                }
+                                            )
+                                            Text(
+                                                text = "Clear All",
+                                                color = Color.LightGray,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.clickable {
+                                                    onInterestsChange(state.availableInterests.joinToString(",")) // Disables all
+                                                }
+                                            )
+                                        }
+                                    }
+                                    FlowRow(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        val interestsList = state.availableInterests
+                                        val activeInterests = state.settings.interests.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+
+                                        interestsList.forEach { interest ->
+                                            val isSelected = !activeInterests.contains(interest)
+                                            FilterChip(
+                                                selected = isSelected,
+                                                onClick = {
+                                                    val newDisabledList = if (isSelected) {
+                                                        activeInterests + interest
+                                                    } else {
+                                                        activeInterests.filter { it != interest }
+                                                    }
+                                                    onInterestsChange(newDisabledList.joinToString(","))
+                                                },
+                                                label = { Text(interest, fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                                                colors = FilterChipDefaults.filterChipColors(
+                                                    selectedContainerColor = primaryGlow,
+                                                    selectedLabelColor = Color.White,
+                                                    containerColor = Color.White.copy(alpha = 0.05f),
+                                                    labelColor = Color.LightGray
+                                                )
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -1490,20 +1655,30 @@ fun ActiveGuideCard(
                         if (isSpeaking) {
                             Button(
                                 onClick = onStopSpeaking,
-                                colors = ButtonDefaults.buttonColors(containerColor = Color.Red.copy(alpha = 0.8f))
+                                colors = ButtonDefaults.buttonColors(containerColor = Color.Red.copy(alpha = 0.8f)),
+                                shape = RoundedCornerShape(20.dp)
                             ) {
                                 Icon(imageVector = Icons.Default.Close, contentDescription = "Stop", tint = Color.White)
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Stop Voice", color = Color.White)
+                                Text("Stop Voice", color = Color.White, fontWeight = FontWeight.Bold)
                             }
                         } else {
+                            val useDarkText = secondaryGlow == Color(0xFF03DAC6)
                             Button(
                                 onClick = onSpeakAgain,
-                                colors = ButtonDefaults.buttonColors(containerColor = secondaryGlow)
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = secondaryGlow,
+                                    contentColor = if (useDarkText) Color.Black else Color.White
+                                ),
+                                shape = RoundedCornerShape(20.dp)
                             ) {
-                                Icon(imageVector = Icons.Default.PlayArrow, contentDescription = "Listen", tint = Color.Black)
+                                Icon(
+                                    imageVector = Icons.Default.PlayArrow,
+                                    contentDescription = "Listen",
+                                    tint = if (useDarkText) Color.Black else Color.White
+                                )
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Listen", color = Color.Black)
+                                Text("Listen", fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -2200,15 +2375,6 @@ fun SettingsView(
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("LOCATION & DETECT CONFIG", color = Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-
-                    Text("Search Radius: ${searchRadius.toInt()} meters", color = Color.White, fontSize = 13.sp)
-                    Slider(
-                        value = searchRadius,
-                        onValueChange = { searchRadius = it },
-                        valueRange = 100f..5000f,
-                        steps = 49,
-                        colors = SliderDefaults.colors(thumbColor = primaryGlow, activeTrackColor = primaryGlow)
-                    )
 
                     Text("GPS Update Frequency: ${updateInterval.toInt()} seconds", color = Color.White, fontSize = 13.sp)
                     Slider(

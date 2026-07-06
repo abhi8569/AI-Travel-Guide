@@ -51,7 +51,8 @@ data class TourGuideUiState(
     val mapCenterLocation: UserLocation? = null,
     val dbDownloadProgress: Float? = null,
     val dbDownloadError: String? = null,
-    val isDatabaseDownloaded: Boolean = false
+    val isDatabaseDownloaded: Boolean = false,
+    val mapResetTrigger: Int = 0
 )
 
 class MainScreenViewModel(application: Application) : AndroidViewModel(application) {
@@ -129,7 +130,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         // Collect last panned location on startup
         viewModelScope.launch {
             settingsRepository.lastLocationFlow.first().let { (lat, lon) ->
-                _uiState.update { it.copy(mapCenterLocation = UserLocation(lat, lon, 0f)) }
+                _uiState.update { it.copy(mapCenterLocation = UserLocation(lat, lon, 0f), mapResetTrigger = it.mapResetTrigger + 1) }
             }
         }
     }
@@ -186,7 +187,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                 .collect { location ->
                     _uiState.update { 
                         if (!it.useMapCenter) {
-                            it.copy(currentLocation = location, mapCenterLocation = location)
+                            it.copy(currentLocation = location, mapCenterLocation = location, mapResetTrigger = it.mapResetTrigger + 1)
                         } else {
                             it.copy(currentLocation = location)
                         }
@@ -217,7 +218,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                 viewModelScope.launch {
                     val lastLoc = locationTracker.getLastKnownLocation()
                     if (lastLoc != null) {
-                        _uiState.update { it.copy(currentLocation = lastLoc, mapCenterLocation = lastLoc) }
+                        _uiState.update { it.copy(currentLocation = lastLoc, mapCenterLocation = lastLoc, mapResetTrigger = it.mapResetTrigger + 1) }
                         searchPlacesNear(lastLoc.latitude, lastLoc.longitude, isAutoTrigger = false)
                     } else {
                         _uiState.update { it.copy(error = "No location coordinates found. Enable GPS or search for a city.") }
@@ -601,7 +602,8 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                         currentLocation = mockLocation,
                         mapCenterLocation = mockLocation,
                         locationTrackingActive = false,
-                        error = "Search resolved! Showing spots nearby."
+                        error = "Search resolved! Showing spots nearby.",
+                        mapResetTrigger = it.mapResetTrigger + 1
                     ) 
                 }
                 searchPlacesNear(coords.first, coords.second)
@@ -627,7 +629,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         val nextMode = !_uiState.value.useMapCenter
         _uiState.update { 
             if (!nextMode && it.currentLocation != null) {
-                it.copy(useMapCenter = nextMode, mapCenterLocation = it.currentLocation)
+                it.copy(useMapCenter = nextMode, mapCenterLocation = it.currentLocation, mapResetTrigger = it.mapResetTrigger + 1)
             } else {
                 it.copy(useMapCenter = nextMode)
             }
@@ -703,6 +705,15 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         viewModelScope.launch {
             settingsRepository.updateSettings { current ->
                 current.copy(godModeSearchRadius = radiusInKm)
+            }
+            refreshPlacesForCurrentState()
+        }
+    }
+
+    fun updateSearchRadius(radiusInMeters: Int) {
+        viewModelScope.launch {
+            settingsRepository.updateSettings { current ->
+                current.copy(searchRadius = radiusInMeters)
             }
             refreshPlacesForCurrentState()
         }
