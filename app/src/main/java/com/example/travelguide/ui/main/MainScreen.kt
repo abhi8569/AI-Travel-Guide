@@ -430,7 +430,7 @@ fun MainScreen(
                     ) {
                         if (state.dbDownloadProgress == 0f) {
                             Text(
-                                text = "God Mode requires the offline Atlas Obscura database (~6MB). Download it now to unlock 31,000+ unusual spots offline?",
+                                text = "God Mode requires the offline Atlas Obscura database (approx 45MB). Download it now to unlock 31,000+ unusual spots offline?",
                                 color = Color.LightGray,
                                 fontSize = 14.sp
                             )
