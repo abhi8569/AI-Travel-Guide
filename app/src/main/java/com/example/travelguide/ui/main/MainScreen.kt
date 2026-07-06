@@ -8,6 +8,7 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.activity.enableEdgeToEdge
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
@@ -83,6 +84,17 @@ fun getCardinalDirection(bearing: Float): String {
     val directions = listOf("N", "NE", "E", "SE", "S", "SW", "W", "NW", "N")
     val index = Math.round(((bearing % 360) / 45.0)).toInt()
     return directions[index]
+}
+
+fun Context.findActivity(): androidx.activity.ComponentActivity? {
+    var currentContext = this
+    while (currentContext is android.content.ContextWrapper) {
+        if (currentContext is androidx.activity.ComponentActivity) {
+            return currentContext
+        }
+        currentContext = currentContext.baseContext
+    }
+    return null
 }
 
 @Composable
@@ -268,8 +280,6 @@ fun LeafletMapView(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
-            .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(20.dp))
     ) {
         AndroidView(
             factory = { mapView },
@@ -458,6 +468,32 @@ fun MainScreen(
     val textColor = if (isLightMode) Color(0xFF1F1D2C) else Color.White
     val subTextColor = if (isLightMode) Color(0xFF6B6A7A) else Color.LightGray
 
+    LaunchedEffect(isLightMode) {
+        val activity = context.findActivity() ?: return@LaunchedEffect
+        activity.enableEdgeToEdge(
+            statusBarStyle = if (isLightMode) {
+                androidx.activity.SystemBarStyle.light(
+                    android.graphics.Color.TRANSPARENT,
+                    android.graphics.Color.TRANSPARENT
+                )
+            } else {
+                androidx.activity.SystemBarStyle.dark(
+                    android.graphics.Color.TRANSPARENT
+                )
+            },
+            navigationBarStyle = if (isLightMode) {
+                androidx.activity.SystemBarStyle.light(
+                    android.graphics.Color.TRANSPARENT,
+                    android.graphics.Color.TRANSPARENT
+                )
+            } else {
+                androidx.activity.SystemBarStyle.dark(
+                    android.graphics.Color.TRANSPARENT
+                )
+            }
+        )
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -557,14 +593,13 @@ fun MainScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .systemBarsPadding()
-                .padding(16.dp)
         ) {
             // Header bar
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 16.dp),
+                    .statusBarsPadding()
+                    .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
@@ -641,7 +676,7 @@ fun MainScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 12.dp)
+                    .padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
                     .background(cardBgColor, RoundedCornerShape(12.dp))
                     .padding(4.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -1087,6 +1122,7 @@ fun DashboardView(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
+                        .navigationBarsPadding()
                         .padding(16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -1165,7 +1201,10 @@ fun DashboardView(
         } else if (activeTab == 1) {
             // Tab 1: Discover List View
             LazyColumn(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp)
+                    .navigationBarsPadding(),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
 
@@ -1242,7 +1281,8 @@ fun DashboardView(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(bottom = 8.dp),
+                    .padding(horizontal = 16.dp)
+                    .navigationBarsPadding(),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 if (state.activePlace == null && !state.isGeneratingGuide) {
