@@ -162,4 +162,89 @@ class PoiRepository {
             null
         }
     }
+
+    fun getDatabaseFile(context: android.content.Context): java.io.File {
+        return context.getDatabasePath("atlas_obscura.db")
+    }
+
+    fun isDatabaseDownloaded(context: android.content.Context): Boolean {
+        val file = getDatabaseFile(context)
+        return file.exists() && file.length() > 0
+    }
+
+    fun fetchLocalAtlasObscuraPlaces(
+        context: android.content.Context,
+        centerLat: Double,
+        centerLon: Double,
+        radiusInKm: Double
+    ): List<PlaceOfInterest> {
+        val dbFile = getDatabaseFile(context)
+        if (!dbFile.exists()) return emptyList()
+
+        val latDelta = radiusInKm / 111.0
+        val lonDelta = radiusInKm / (111.0 * Math.cos(Math.toRadians(centerLat)))
+
+        val minLat = centerLat - latDelta
+        val maxLat = centerLat + latDelta
+        val minLon = centerLon - lonDelta
+        val maxLon = centerLon + lonDelta
+
+        val list = mutableListOf<PlaceOfInterest>()
+        var db: android.database.sqlite.SQLiteDatabase? = null
+        var cursor: android.database.Cursor? = null
+
+        try {
+            db = android.database.sqlite.SQLiteDatabase.openDatabase(
+                dbFile.absolutePath,
+                null,
+                android.database.sqlite.SQLiteDatabase.OPEN_READONLY
+            )
+            cursor = db.rawQuery(
+                "SELECT id, title, subtitle, lat, lng, description, tags, url FROM places WHERE lat BETWEEN ? AND ? AND lng BETWEEN ? AND ?",
+                arrayOf(minLat.toString(), maxLat.toString(), minLon.toString(), maxLon.toString())
+            )
+
+            while (cursor.moveToNext()) {
+                val id = cursor.getLong(cursor.getColumnIndexOrThrow("id"))
+                val title = cursor.getString(cursor.getColumnIndexOrThrow("title"))
+                val subtitle = cursor.getString(cursor.getColumnIndexOrThrow("subtitle")) ?: ""
+                val lat = cursor.getDouble(cursor.getColumnIndexOrThrow("lat"))
+                val lng = cursor.getDouble(cursor.getColumnIndexOrThrow("lng"))
+                val description = cursor.getString(cursor.getColumnIndexOrThrow("description")) ?: ""
+                val tags = cursor.getString(cursor.getColumnIndexOrThrow("tags")) ?: ""
+                val url = cursor.getString(cursor.getColumnIndexOrThrow("url")) ?: ""
+
+                val results = FloatArray(1)
+                Location.distanceBetween(centerLat, centerLon, lat, lng, results)
+                val distance = results[0]
+
+                if (distance <= radiusInKm * 1000) {
+                    list.add(
+                        PlaceOfInterest(
+                            id = "godmode_$id",
+                            name = title,
+                            lat = lat,
+                            lon = lng,
+                            category = "Unusual Spot",
+                            distance = distance,
+                            tags = mapOf(
+                                "description" to description,
+                                "subtitle" to subtitle,
+                                "tags" to tags,
+                                "url" to url,
+                                "godmode" to "true"
+                            )
+                        )
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        } finally {
+            cursor?.close()
+            db?.close()
+        }
+
+        return list.sortedBy { it.distance }
+    }
 }

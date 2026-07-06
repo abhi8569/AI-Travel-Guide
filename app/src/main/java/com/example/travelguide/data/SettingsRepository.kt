@@ -28,7 +28,9 @@ data class TourGuideSettings(
     val mapLayer: String,           // map tile source layer, e.g. "dark", "light", "satellite"
     val promptShort: String,        // short detail instruction prompt
     val promptDetailed: String,     // detailed detail instruction prompt
-    val promptInterestingFacts: String // interesting facts detail instruction prompt
+    val promptInterestingFacts: String, // interesting facts detail instruction prompt
+    val isGodModeActive: Boolean,   // whether God Mode is enabled
+    val godModeSearchRadius: Int    // God Mode search radius in km
 )
 
 class SettingsRepository(private val context: Context) {
@@ -59,6 +61,8 @@ class SettingsRepository(private val context: Context) {
         val PROMPT_SHORT = stringPreferencesKey("prompt_short")
         val PROMPT_DETAILED = stringPreferencesKey("prompt_detailed")
         val PROMPT_INTERESTING_FACTS = stringPreferencesKey("prompt_interesting_facts")
+        val IS_GOD_MODE_ACTIVE = booleanPreferencesKey("is_god_mode_active")
+        val GOD_MODE_SEARCH_RADIUS = intPreferencesKey("god_mode_search_radius")
     }
 
     val settingsFlow: Flow<TourGuideSettings> = context.dataStore.data
@@ -87,7 +91,9 @@ class SettingsRepository(private val context: Context) {
                 mapLayer = preferences[PreferencesKeys.MAP_LAYER] ?: "dark",
                 promptShort = preferences[PreferencesKeys.PROMPT_SHORT] ?: DEFAULT_PROMPT_SHORT,
                 promptDetailed = preferences[PreferencesKeys.PROMPT_DETAILED] ?: DEFAULT_PROMPT_DETAILED,
-                promptInterestingFacts = preferences[PreferencesKeys.PROMPT_INTERESTING_FACTS] ?: DEFAULT_PROMPT_INTERESTING_FACTS
+                promptInterestingFacts = preferences[PreferencesKeys.PROMPT_INTERESTING_FACTS] ?: DEFAULT_PROMPT_INTERESTING_FACTS,
+                isGodModeActive = preferences[PreferencesKeys.IS_GOD_MODE_ACTIVE] ?: false,
+                godModeSearchRadius = preferences[PreferencesKeys.GOD_MODE_SEARCH_RADIUS] ?: 10
             )
         }
 
@@ -110,7 +116,9 @@ class SettingsRepository(private val context: Context) {
                 mapLayer = preferences[PreferencesKeys.MAP_LAYER] ?: "dark",
                 promptShort = preferences[PreferencesKeys.PROMPT_SHORT] ?: DEFAULT_PROMPT_SHORT,
                 promptDetailed = preferences[PreferencesKeys.PROMPT_DETAILED] ?: DEFAULT_PROMPT_DETAILED,
-                promptInterestingFacts = preferences[PreferencesKeys.PROMPT_INTERESTING_FACTS] ?: DEFAULT_PROMPT_INTERESTING_FACTS
+                promptInterestingFacts = preferences[PreferencesKeys.PROMPT_INTERESTING_FACTS] ?: DEFAULT_PROMPT_INTERESTING_FACTS,
+                isGodModeActive = preferences[PreferencesKeys.IS_GOD_MODE_ACTIVE] ?: false,
+                godModeSearchRadius = preferences[PreferencesKeys.GOD_MODE_SEARCH_RADIUS] ?: 10
             )
             val updated = updater(current)
             preferences[PreferencesKeys.PROVIDER_NAME] = updated.providerName
@@ -130,6 +138,8 @@ class SettingsRepository(private val context: Context) {
             preferences[PreferencesKeys.PROMPT_SHORT] = updated.promptShort
             preferences[PreferencesKeys.PROMPT_DETAILED] = updated.promptDetailed
             preferences[PreferencesKeys.PROMPT_INTERESTING_FACTS] = updated.promptInterestingFacts
+            preferences[PreferencesKeys.IS_GOD_MODE_ACTIVE] = updated.isGodModeActive
+            preferences[PreferencesKeys.GOD_MODE_SEARCH_RADIUS] = updated.godModeSearchRadius
         }
     }
 

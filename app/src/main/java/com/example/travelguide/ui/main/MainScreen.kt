@@ -390,8 +390,8 @@ fun MainScreen(
     // Premium styling constants
     val darkBgColor = Color(0xFF0F0E17) // Dark obsidian
     val cardBgColor = Color(0xFF1F1D2C) // Glassy dark slate
-    val primaryGlow = Color(0xFF6200EE) // Royal purple
-    val secondaryGlow = Color(0xFF03DAC6) // Teal accent
+    val primaryGlow = if (state.settings.isGodModeActive) Color(0xFFD500F9) else Color(0xFF6200EE) // Neon Magenta vs Royal Purple
+    val secondaryGlow = if (state.settings.isGodModeActive) Color(0xFFFF007F) else Color(0xFF03DAC6) // Neon Pink vs Teal Accent
 
     Box(
         modifier = modifier
@@ -411,6 +411,83 @@ fun MainScreen(
                 .align(Alignment.BottomStart)
                 .background(Brush.radialGradient(colors = listOf(secondaryGlow.copy(alpha = 0.12f), Color.Transparent)))
         )
+
+        if (state.dbDownloadProgress != null) {
+            AlertDialog(
+                onDismissRequest = { viewModel.cancelDownload() },
+                title = {
+                    Text(
+                        text = if (state.dbDownloadProgress == 0f) "Download Required" else "Downloading Database",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                text = {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        if (state.dbDownloadProgress == 0f) {
+                            Text(
+                                text = "God Mode requires the offline Atlas Obscura database (~6MB). Download it now to unlock 31,000+ unusual spots offline?",
+                                color = Color.LightGray,
+                                fontSize = 14.sp
+                            )
+                        } else {
+                            Text(
+                                text = "Downloading database files from GitHub...",
+                                color = Color.LightGray,
+                                fontSize = 14.sp
+                            )
+                            LinearProgressIndicator(
+                                progress = { state.dbDownloadProgress ?: 0f },
+                                modifier = Modifier.fillMaxWidth(),
+                                color = primaryGlow,
+                                trackColor = Color.White.copy(alpha = 0.1f)
+                            )
+                            Text(
+                                text = "${((state.dbDownloadProgress ?: 0f) * 100).toInt()}%",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp
+                            )
+                        }
+                    }
+                },
+                confirmButton = {
+                    if (state.dbDownloadProgress == 0f) {
+                        TextButton(onClick = { viewModel.downloadDatabase() }) {
+                            Text("Download", color = primaryGlow, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                },
+                dismissButton = {
+                    if (state.dbDownloadProgress == 0f) {
+                        TextButton(onClick = { viewModel.cancelDownload() }) {
+                            Text("Cancel", color = Color.Gray)
+                        }
+                    }
+                },
+                containerColor = cardBgColor,
+                shape = RoundedCornerShape(16.dp)
+            )
+        }
+
+        if (state.dbDownloadError != null) {
+            AlertDialog(
+                onDismissRequest = { viewModel.cancelDownload() },
+                title = { Text("Download Failed", color = Color.Red, fontWeight = FontWeight.Bold) },
+                text = { Text(state.dbDownloadError ?: "Unknown error", color = Color.LightGray) },
+                confirmButton = {
+                    TextButton(onClick = { viewModel.cancelDownload() }) {
+                        Text("OK", color = primaryGlow, fontWeight = FontWeight.Bold)
+                    }
+                },
+                containerColor = cardBgColor,
+                shape = RoundedCornerShape(16.dp)
+            )
+        }
 
         Column(
             modifier = Modifier
@@ -507,6 +584,63 @@ fun MainScreen(
                 }
             }
 
+            // Mode Selector: Standard Mode | God Mode
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp)
+                    .background(cardBgColor, RoundedCornerShape(12.dp))
+                    .padding(4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .background(
+                            if (!state.settings.isGodModeActive) primaryGlow.copy(alpha = 0.2f) else Color.Transparent,
+                            RoundedCornerShape(8.dp)
+                        )
+                        .border(
+                            1.dp,
+                            if (!state.settings.isGodModeActive) primaryGlow.copy(alpha = 0.4f) else Color.Transparent,
+                            RoundedCornerShape(8.dp)
+                        )
+                        .clickable { viewModel.toggleGodMode(false) }
+                        .padding(vertical = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Standard Mode 🌍",
+                        color = if (!state.settings.isGodModeActive) Color.White else Color.Gray,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .background(
+                            if (state.settings.isGodModeActive) primaryGlow.copy(alpha = 0.2f) else Color.Transparent,
+                            RoundedCornerShape(8.dp)
+                        )
+                        .border(
+                            1.dp,
+                            if (state.settings.isGodModeActive) primaryGlow.copy(alpha = 0.4f) else Color.Transparent,
+                            RoundedCornerShape(8.dp)
+                        )
+                        .clickable { viewModel.toggleGodMode(true) }
+                        .padding(vertical = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "God Mode 👁️",
+                        color = if (state.settings.isGodModeActive) Color.White else Color.Gray,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp
+                    )
+                }
+            }
+
             // Main Content Area
             ContentArea(
                 showSettings = showSettings,
@@ -587,7 +721,9 @@ fun ContentArea(
                     )
                 },
                 cardBgColor = cardBgColor,
-                secondaryGlow = secondaryGlow
+                primaryGlow = primaryGlow,
+                secondaryGlow = secondaryGlow,
+                vm = vm
             )
         }
 
@@ -634,7 +770,9 @@ fun DashboardView(
     onLayerChanged: (String) -> Unit,
     onInterestsChange: (String) -> Unit,
     cardBgColor: Color,
-    secondaryGlow: Color
+    primaryGlow: Color,
+    secondaryGlow: Color,
+    vm: MainScreenViewModel
 ) {
     var activeTab by remember { mutableIntStateOf(0) } // 0: Map, 1: Discover, 2: Audio Guide
 
@@ -771,16 +909,35 @@ fun DashboardView(
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 13.sp
                                     )
-                                    Button(
-                                        onClick = { 
-                                            onPlaceSelect(place) // triggers narration and guide generation
-                                            activeTab = 2 // switches to Audio Guide tab
-                                        },
-                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6200EE))
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
-                                        Icon(Icons.Default.Hearing, contentDescription = null, modifier = Modifier.size(16.dp))
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Hear Guide", fontSize = 12.sp)
+                                        val url = place.tags["url"]
+                                        if (!url.isNullOrBlank()) {
+                                            val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+                                            IconButton(
+                                                onClick = { uriHandler.openUri(url) },
+                                                modifier = Modifier.size(36.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Language,
+                                                    contentDescription = "Open Web Link",
+                                                    tint = Color.White
+                                                )
+                                            }
+                                        }
+                                        Button(
+                                            onClick = { 
+                                                onPlaceSelect(place) // triggers narration and guide generation
+                                                activeTab = 2 // switches to Audio Guide tab
+                                            },
+                                            colors = ButtonDefaults.buttonColors(containerColor = primaryGlow)
+                                        ) {
+                                            Icon(Icons.Default.Hearing, contentDescription = null, modifier = Modifier.size(16.dp))
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text("Hear Guide", fontSize = 12.sp)
+                                        }
                                     }
                                 }
                             }
@@ -794,6 +951,52 @@ fun DashboardView(
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
+                // God Mode Search Radius Slider (shown only when God Mode is active)
+                if (state.settings.isGodModeActive) {
+                    item {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            colors = CardDefaults.cardColors(containerColor = cardBgColor.copy(alpha = 0.5f)),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, primaryGlow.copy(alpha = 0.15f)),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "GOD MODE SEARCH RADIUS",
+                                        color = Color.Gray,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = "${state.settings.godModeSearchRadius} km",
+                                        color = primaryGlow,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        fontSize = 14.sp
+                                    )
+                                }
+                                Slider(
+                                    value = state.settings.godModeSearchRadius.toFloat(),
+                                    onValueChange = { vm.updateGodModeSearchRadius(it.toInt()) },
+                                    valueRange = 1f..50f,
+                                    steps = 49,
+                                    colors = SliderDefaults.colors(
+                                        thumbColor = primaryGlow,
+                                        activeTrackColor = primaryGlow,
+                                        inactiveTrackColor = Color.White.copy(alpha = 0.1f)
+                                    )
+                                )
+                            }
+                        }
+                    }
+                }
+
                 // Geocoding Search Bar to search other places/cities
                 item {
                     var searchQuery by remember { mutableStateOf("") }
@@ -1236,7 +1439,6 @@ fun ActiveGuideCard(
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     // Google Maps integration button
@@ -1248,6 +1450,22 @@ fun ActiveGuideCard(
                         Spacer(modifier = Modifier.width(6.dp))
                         Text("Show Route", color = Color.White, fontSize = 12.sp)
                     }
+
+                    val url = place?.tags?.get("url")
+                    if (!url.isNullOrBlank()) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+                        Button(
+                            onClick = { uriHandler.openUri(url) },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.1f))
+                        ) {
+                            Icon(imageVector = Icons.Default.Language, contentDescription = "Open Web", tint = Color.White)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Atlas Obscura", color = Color.White, fontSize = 12.sp)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.weight(1f))
 
                     Row {
                         if (isSpeaking) {

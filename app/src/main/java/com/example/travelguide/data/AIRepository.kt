@@ -68,7 +68,15 @@ class AIRepository {
         val city = cityAndCountry?.first ?: "Unknown City"
         val country = cityAndCountry?.second ?: "Unknown Country"
 
-        val tagsText = place.tags.entries.joinToString { "${it.key}=${it.value}" }
+        val isGodModePlace = place.tags["godmode"] == "true"
+        val tagsText = if (isGodModePlace) {
+            val desc = place.tags["description"] ?: ""
+            val subt = place.tags["subtitle"] ?: ""
+            val rawTags = place.tags["tags"] ?: ""
+            "Description: $desc\nSubtitle: $subt\nRaw Tags: $rawTags"
+        } else {
+            place.tags.entries.joinToString { "${it.key}=${it.value}" }
+        }
         
         val customPromptString = settings.customPrompt.trim()
         val systemPrompt = when {
@@ -98,7 +106,7 @@ class AIRepository {
             City: $city
             Country: $country
             Category: ${place.category}
-            OpenStreetMap Details: $tagsText
+            Location Details: $tagsText
 
             Narrator Constraints:
             1. Speak directly to the traveler.

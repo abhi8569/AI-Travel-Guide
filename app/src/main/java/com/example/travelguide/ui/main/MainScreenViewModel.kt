@@ -29,7 +29,9 @@ data class TourGuideUiState(
         mapLayer = "dark",
         promptShort = SettingsRepository.DEFAULT_PROMPT_SHORT,
         promptDetailed = SettingsRepository.DEFAULT_PROMPT_DETAILED,
-        promptInterestingFacts = SettingsRepository.DEFAULT_PROMPT_INTERESTING_FACTS
+        promptInterestingFacts = SettingsRepository.DEFAULT_PROMPT_INTERESTING_FACTS,
+        isGodModeActive = false,
+        godModeSearchRadius = 10
     ),
     val currentLocation: UserLocation? = null,
     val nearbyPlaces: List<PlaceOfInterest> = emptyList(),
@@ -46,7 +48,10 @@ data class TourGuideUiState(
     val isFetchingModels: Boolean = false,
     val availableInterests: List<String> = emptyList(), // Extracted from nearby options dynamically
     val useMapCenter: Boolean = true,
-    val mapCenterLocation: UserLocation? = null
+    val mapCenterLocation: UserLocation? = null,
+    val dbDownloadProgress: Float? = null,
+    val dbDownloadError: String? = null,
+    val isDatabaseDownloaded: Boolean = false
 )
 
 class MainScreenViewModel(application: Application) : AndroidViewModel(application) {
@@ -69,6 +74,9 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     private var activeInterval = 0L
 
     init {
+        val isDbDownloaded = poiRepository.isDatabaseDownloaded(application)
+        _uiState.update { it.copy(isDatabaseDownloaded = isDbDownloaded) }
+
         // Collect settings and update state
         viewModelScope.launch {
             settingsRepository.settingsFlow.collect { newSettings ->
@@ -221,18 +229,26 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
 
     private suspend fun searchPlacesNear(lat: Double, lon: Double, isAutoTrigger: Boolean = false) {
         _uiState.update { it.copy(isSearchingPlaces = true, error = null) }
-        val radius = _uiState.value.settings.searchRadius
-        val places = poiRepository.fetchNearbyPlaces(lat, lon, radius)
+        val settings = _uiState.value.settings
+        val places = if (settings.isGodModeActive) {
+            poiRepository.fetchLocalAtlasObscuraPlaces(
+                context = getApplication(),
+                centerLat = lat,
+                centerLon = lon,
+                radiusInKm = settings.godModeSearchRadius.toDouble()
+            )
+        } else {
+            poiRepository.fetchNearbyPlaces(lat, lon, settings.searchRadius)
+        }
         
         rawNearbyPlaces = places
-        val settings = _uiState.value.settings
         
-        val popularPlaces = if (settings.popularOnly) {
+        val popularPlaces = if (settings.popularOnly && !settings.isGodModeActive) {
             places.filter { place ->
                 val hasWiki = place.tags.containsKey("wikipedia") || place.tags.containsKey("wikidata")
                 val isMajorAttraction = place.category.lowercase().contains("museum") || 
-                                        place.category.lowercase().contains("castle") || 
-                                        place.category.lowercase().contains("monument")
+                                         place.category.lowercase().contains("castle") || 
+                                         place.category.lowercase().contains("monument")
                 hasWiki || isMajorAttraction
             }
         } else {
@@ -242,7 +258,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         
         _uiState.update { 
             it.copy(
-                nearbyPlaces = filterPlaces(places, settings),
+                nearbyPlaces = if (settings.isGodModeActive) places else filterPlaces(places, settings),
                 availableInterests = categories,
                 isSearchingPlaces = false
             ) 
@@ -437,7 +453,9 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                     mapLayer = current.mapLayer,
                     promptShort = current.promptShort,
                     promptDetailed = current.promptDetailed,
-                    promptInterestingFacts = current.promptInterestingFacts
+                    promptInterestingFacts = current.promptInterestingFacts,
+                    isGodModeActive = current.isGodModeActive,
+                    godModeSearchRadius = current.godModeSearchRadius
                 )
             }
         }
@@ -625,6 +643,81 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         val center = _uiState.value.mapCenterLocation ?: return
         viewModelScope.launch {
             searchPlacesNear(center.latitude, center.longitude, isAutoTrigger = false)
+        }
+    }
+
+    fun toggleGodMode(active: Boolean) {
+        val isDbDownloaded = poiRepository.isDatabaseDownloaded(getApplication())
+        if (active && !isDbDownloaded) {
+            _uiState.update { it.copy(dbDownloadProgress = 0f, dbDownloadError = null) }
+            return
+        }
+        viewModelScope.launch {
+            settingsRepository.updateSettings { current ->
+                current.copy(isGodModeActive = active)
+            }
+            refreshPlacesForCurrentState()
+        }
+    }
+
+    fun downloadDatabase() {
+        _uiState.update { it.copy(dbDownloadProgress = 0f, dbDownloadError = null) }
+        viewModelScope.launch {
+            val dbFile = poiRepository.getDatabaseFile(getApplication())
+            val url = "https://raw.githubusercontent.com/abhi8569/Atlas-Obscura-Database/main/atlas_obscura.db"
+            DatabaseDownloader.downloadFile(url, dbFile).collect { state ->
+                when (state) {
+                    is DownloadState.Progress -> {
+                        _uiState.update { it.copy(dbDownloadProgress = state.progress) }
+                    }
+                    is DownloadState.Success -> {
+                        _uiState.update { 
+                            it.copy(
+                                dbDownloadProgress = null,
+                                isDatabaseDownloaded = true
+                            ) 
+                        }
+                        settingsRepository.updateSettings { current ->
+                            current.copy(isGodModeActive = true)
+                        }
+                        refreshPlacesForCurrentState()
+                    }
+                    is DownloadState.Error -> {
+                        _uiState.update { 
+                            it.copy(
+                                dbDownloadProgress = null,
+                                dbDownloadError = "Failed to download database: ${state.message}"
+                            ) 
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fun cancelDownload() {
+        _uiState.update { it.copy(dbDownloadProgress = null, dbDownloadError = null) }
+    }
+
+    fun updateGodModeSearchRadius(radiusInKm: Int) {
+        viewModelScope.launch {
+            settingsRepository.updateSettings { current ->
+                current.copy(godModeSearchRadius = radiusInKm)
+            }
+            refreshPlacesForCurrentState()
+        }
+    }
+
+    fun refreshPlacesForCurrentState() {
+        val center = if (_uiState.value.useMapCenter) {
+            _uiState.value.mapCenterLocation
+        } else {
+            _uiState.value.currentLocation
+        }
+        if (center != null) {
+            viewModelScope.launch {
+                searchPlacesNear(center.latitude, center.longitude, isAutoTrigger = false)
+            }
         }
     }
 
