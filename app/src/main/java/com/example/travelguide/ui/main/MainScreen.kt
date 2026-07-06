@@ -351,6 +351,18 @@ fun MainScreen(
         BackHandler {
             showSettings = false
         }
+    } else {
+        var lastBackPressTime by remember { mutableLongStateOf(0L) }
+        val activity = context as? android.app.Activity
+        BackHandler {
+            val currentTime = System.currentTimeMillis()
+            if (currentTime - lastBackPressTime < 2000L) {
+                activity?.finish()
+            } else {
+                lastBackPressTime = currentTime
+                Toast.makeText(context, "Press back again to exit", Toast.LENGTH_SHORT).show()
+            }
+        }
     }
 
     // Request permissions launcher
@@ -876,7 +888,7 @@ fun DashboardView(
                     if (state.useMapCenter) {
                         Button(
                             onClick = { onScanMapCenterArea() },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6200EE)),
+                            colors = ButtonDefaults.buttonColors(containerColor = primaryGlow),
                             shape = RoundedCornerShape(20.dp),
                             contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
                         ) {
@@ -1093,7 +1105,7 @@ fun DashboardView(
                                         },
                                         label = { Text(interest, fontSize = 11.sp, fontWeight = FontWeight.Bold) },
                                         colors = FilterChipDefaults.filterChipColors(
-                                            selectedContainerColor = Color(0xFF6200EE),
+                                            selectedContainerColor = primaryGlow,
                                             selectedLabelColor = Color.White,
                                             containerColor = Color.White.copy(alpha = 0.05f),
                                             labelColor = Color.LightGray
@@ -1212,6 +1224,7 @@ fun DashboardView(
                         onSpeechRateChange = onSpeechRateChange,
                         onDetailLevelChange = onDetailLevelChange,
                         cardBgColor = cardBgColor,
+                        primaryGlow = primaryGlow,
                         secondaryGlow = secondaryGlow,
                         modifier = Modifier.weight(1f)
                     )
@@ -1223,6 +1236,7 @@ fun DashboardView(
                             isSending = state.isSendingChatMessage,
                             onSendMessage = onSendMessage,
                             cardBgColor = cardBgColor,
+                            primaryGlow = primaryGlow,
                             modifier = Modifier.wrapContentHeight()
                         )
                     }
@@ -1246,6 +1260,7 @@ fun ActiveGuideCard(
     onSpeechRateChange: (Float) -> Unit,
     onDetailLevelChange: (String) -> Unit,
     cardBgColor: Color,
+    primaryGlow: Color,
     secondaryGlow: Color,
     modifier: Modifier = Modifier
 ) {
@@ -1278,7 +1293,11 @@ fun ActiveGuideCard(
                 )
 
                 // equalizer voice visualizer
-                VoiceEqualizer(isSpeaking = isSpeaking)
+                VoiceEqualizer(
+                    isSpeaking = isSpeaking,
+                    primaryColor = primaryGlow,
+                    secondaryColor = secondaryGlow
+                )
             }
 
             Row(
@@ -1501,6 +1520,7 @@ fun ChatGuideCard(
     isSending: Boolean,
     onSendMessage: (String) -> Unit,
     cardBgColor: Color,
+    primaryGlow: Color,
     modifier: Modifier = Modifier
 ) {
     var questionText by remember { mutableStateOf("") }
@@ -1559,7 +1579,7 @@ fun ChatGuideCard(
                                                 bottomEnd = if (isUser) 0.dp else 12.dp
                                             )
                                         )
-                                        .background(if (isUser) Color(0xFF6200EE) else Color.White.copy(alpha = 0.08f))
+                                        .background(if (isUser) primaryGlow else Color.White.copy(alpha = 0.08f))
                                         .padding(8.dp)
                                 ) {
                                     Text(
@@ -1614,7 +1634,7 @@ fun ChatGuideCard(
                     },
                     enabled = !isSending && questionText.isNotBlank(),
                     colors = IconButtonDefaults.iconButtonColors(
-                        containerColor = Color(0xFF6200EE),
+                        containerColor = primaryGlow,
                         disabledContainerColor = Color.Gray.copy(alpha = 0.3f)
                     )
                 ) {
@@ -2269,6 +2289,8 @@ fun SettingsView(
 @Composable
 fun VoiceEqualizer(
     isSpeaking: Boolean,
+    primaryColor: Color = Color(0xFF6200EE),
+    secondaryColor: Color = Color(0xFF03DAC6),
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -2302,8 +2324,8 @@ fun VoiceEqualizer(
                     .background(
                         brush = Brush.verticalGradient(
                             colors = listOf(
-                                Color(0xFF6200EE),
-                                Color(0xFF03DAC6)
+                                primaryColor,
+                                secondaryColor
                             )
                         ),
                         shape = RoundedCornerShape(2.dp)
