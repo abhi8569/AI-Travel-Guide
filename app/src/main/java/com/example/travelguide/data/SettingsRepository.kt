@@ -30,7 +30,8 @@ data class TourGuideSettings(
     val promptDetailed: String,     // detailed detail instruction prompt
     val promptInterestingFacts: String, // interesting facts detail instruction prompt
     val isGodModeActive: Boolean,   // whether God Mode is enabled
-    val godModeSearchRadius: Int    // God Mode search radius in km
+    val godModeSearchRadius: Int,   // God Mode search radius in km
+    val isDarkMode: Boolean
 )
 
 class SettingsRepository(private val context: Context) {
@@ -63,6 +64,7 @@ class SettingsRepository(private val context: Context) {
         val PROMPT_INTERESTING_FACTS = stringPreferencesKey("prompt_interesting_facts")
         val IS_GOD_MODE_ACTIVE = booleanPreferencesKey("is_god_mode_active")
         val GOD_MODE_SEARCH_RADIUS = intPreferencesKey("god_mode_search_radius")
+        val IS_DARK_MODE = booleanPreferencesKey("is_dark_mode")
     }
 
     val settingsFlow: Flow<TourGuideSettings> = context.dataStore.data
@@ -93,7 +95,8 @@ class SettingsRepository(private val context: Context) {
                 promptDetailed = preferences[PreferencesKeys.PROMPT_DETAILED] ?: DEFAULT_PROMPT_DETAILED,
                 promptInterestingFacts = preferences[PreferencesKeys.PROMPT_INTERESTING_FACTS] ?: DEFAULT_PROMPT_INTERESTING_FACTS,
                 isGodModeActive = preferences[PreferencesKeys.IS_GOD_MODE_ACTIVE] ?: false,
-                godModeSearchRadius = preferences[PreferencesKeys.GOD_MODE_SEARCH_RADIUS] ?: 10
+                godModeSearchRadius = preferences[PreferencesKeys.GOD_MODE_SEARCH_RADIUS] ?: 10,
+                isDarkMode = preferences[PreferencesKeys.IS_DARK_MODE] ?: true
             )
         }
 
@@ -118,7 +121,8 @@ class SettingsRepository(private val context: Context) {
                 promptDetailed = preferences[PreferencesKeys.PROMPT_DETAILED] ?: DEFAULT_PROMPT_DETAILED,
                 promptInterestingFacts = preferences[PreferencesKeys.PROMPT_INTERESTING_FACTS] ?: DEFAULT_PROMPT_INTERESTING_FACTS,
                 isGodModeActive = preferences[PreferencesKeys.IS_GOD_MODE_ACTIVE] ?: false,
-                godModeSearchRadius = preferences[PreferencesKeys.GOD_MODE_SEARCH_RADIUS] ?: 10
+                godModeSearchRadius = preferences[PreferencesKeys.GOD_MODE_SEARCH_RADIUS] ?: 10,
+                isDarkMode = preferences[PreferencesKeys.IS_DARK_MODE] ?: true
             )
             val updated = updater(current)
             preferences[PreferencesKeys.PROVIDER_NAME] = updated.providerName
@@ -140,6 +144,7 @@ class SettingsRepository(private val context: Context) {
             preferences[PreferencesKeys.PROMPT_INTERESTING_FACTS] = updated.promptInterestingFacts
             preferences[PreferencesKeys.IS_GOD_MODE_ACTIVE] = updated.isGodModeActive
             preferences[PreferencesKeys.GOD_MODE_SEARCH_RADIUS] = updated.godModeSearchRadius
+            preferences[PreferencesKeys.IS_DARK_MODE] = updated.isDarkMode
         }
     }
 

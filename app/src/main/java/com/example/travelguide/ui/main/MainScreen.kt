@@ -331,12 +331,14 @@ fun LeafletMapView(
     }
 
     if (overlappingPlacesToSelect != null) {
+        val dialogTextColor = if (cardBgColor == Color.White) Color(0xFF1C1B1F) else Color.White
+        val dialogSubTextColor = if (cardBgColor == Color.White) Color(0xFF6B6A7A) else Color.LightGray
         AlertDialog(
             onDismissRequest = { overlappingPlacesToSelect = null },
             title = {
                 Text(
                     text = "Multiple spots found here",
-                    color = Color.White,
+                    color = dialogTextColor,
                     fontWeight = FontWeight.Bold,
                     fontSize = 16.sp
                 )
@@ -348,7 +350,7 @@ fun LeafletMapView(
                 ) {
                     Text(
                         text = "Several points of interest are very close together. Select which one you want to inspect:",
-                        color = Color.LightGray,
+                        color = dialogSubTextColor,
                         fontSize = 13.sp
                     )
                     LazyColumn(
@@ -372,7 +374,7 @@ fun LeafletMapView(
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
                                         text = spot.name,
-                                        color = Color.White,
+                                        color = dialogTextColor,
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 14.sp
                                     )
@@ -506,11 +508,13 @@ fun MainScreen(
     }
 
     // Premium styling constants
-    val isLightMode = state.settings.mapLayer == "light"
+    val isLightMode = !state.settings.isDarkMode
     val darkBgColor = if (isLightMode) Color(0xFFF2F1F6) else Color(0xFF0F0E17) // Light gray-blue vs Dark obsidian
     val cardBgColor = if (isLightMode) Color(0xFFFFFFFF) else Color(0xFF1F1D2C) // Pristine white vs Glassy dark slate
     val primaryGlow = if (state.settings.isGodModeActive) Color(0xFFD500F9) else Color(0xFF6200EE) // Neon Magenta vs Royal Purple
     val secondaryGlow = if (state.settings.isGodModeActive) Color(0xFFFF007F) else Color(0xFF03DAC6) // Neon Pink vs Teal Accent
+    val textColor = if (isLightMode) Color(0xFF1F1D2C) else Color.White
+    val subTextColor = if (isLightMode) Color(0xFF6B6A7A) else Color.LightGray
 
     Box(
         modifier = modifier
@@ -611,6 +615,7 @@ fun MainScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .systemBarsPadding()
                 .padding(16.dp)
         ) {
             // Header bar
@@ -624,7 +629,7 @@ fun MainScreen(
                 Column {
                     Text(
                         text = "AI TOUR GUIDE",
-                        color = Color.White,
+                        color = textColor,
                         fontSize = 24.sp,
                         fontWeight = FontWeight.ExtraBold,
                         letterSpacing = 1.5.sp
@@ -669,7 +674,7 @@ fun MainScreen(
                         Icon(
                             imageVector = if (state.locationTrackingActive) Icons.Default.LocationOn else Icons.Default.LocationOff,
                             contentDescription = "Toggle Tracking",
-                            tint = if (state.locationTrackingActive) secondaryGlow else Color.LightGray
+                            tint = if (state.locationTrackingActive) secondaryGlow else textColor
                         )
                     }
 
@@ -682,7 +687,7 @@ fun MainScreen(
                         Icon(
                             imageVector = Icons.Default.Refresh,
                             contentDescription = "Refresh Places",
-                            tint = Color.White
+                            tint = textColor
                         )
                     }
 
@@ -697,7 +702,7 @@ fun MainScreen(
                         Icon(
                             imageVector = Icons.Default.Settings,
                             contentDescription = "Settings",
-                            tint = Color.White
+                            tint = if (showSettings) Color.White else textColor
                         )
                     }
                 }
@@ -801,6 +806,10 @@ fun ContentArea(
     secondaryGlow: Color,
     modifier: Modifier = Modifier
 ) {
+    val isLightMode = !state.settings.isDarkMode
+    val textColor = if (isLightMode) Color(0xFF1F1D2C) else Color.White
+    val subTextColor = if (isLightMode) Color(0xFF6B6A7A) else Color.LightGray
+
     Box(modifier = modifier) {
         AnimatedVisibility(
             visible = !showSettings,
@@ -836,7 +845,8 @@ fun ContentArea(
                         autoPlay = state.settings.autoPlay,
                         interests = newInterests,
                         popularOnly = state.settings.popularOnly,
-                        customPrompt = state.settings.customPrompt
+                        customPrompt = state.settings.customPrompt,
+                        isDarkMode = state.settings.isDarkMode
                     )
                 },
                 cardBgColor = cardBgColor,
@@ -856,9 +866,8 @@ fun ContentArea(
                 fetchedModels = state.fetchedModels,
                 isFetchingModels = state.isFetchingModels,
                 onFetchModels = { url, key -> vm.fetchModelsList(url, key) },
-                onSave = { provider, apiKey, baseUrl, model, radius, freq, detail, rate, pitch, auto, interests, popular, customPrompt, mapLayer ->
-                    vm.updateSettings(provider, apiKey, baseUrl, model, radius, freq, detail, rate, pitch, auto, interests, popular, customPrompt)
-                    vm.updateMapLayer(mapLayer)
+                onSave = { provider, apiKey, baseUrl, model, radius, freq, detail, rate, pitch, auto, interests, popular, customPrompt, isDarkMode ->
+                    vm.updateSettings(provider, apiKey, baseUrl, model, radius, freq, detail, rate, pitch, auto, interests, popular, customPrompt, isDarkMode)
                     onSettingsDismiss()
                 },
                 onSavePrompts = { base, sh, dt, inf ->
@@ -894,6 +903,10 @@ fun DashboardView(
     secondaryGlow: Color,
     vm: MainScreenViewModel
 ) {
+    val isLightMode = !state.settings.isDarkMode
+    val textColor = if (isLightMode) Color(0xFF1F1D2C) else Color.White
+    val subTextColor = if (isLightMode) Color(0xFF6B6A7A) else Color.LightGray
+
     var activeTab by remember { mutableIntStateOf(0) } // 0: Map, 1: Discover, 2: Audio Guide
     var showFiltersPanel by remember { mutableStateOf(false) }
 
@@ -1101,10 +1114,10 @@ fun DashboardView(
                             }
                         }),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White,
+                            focusedTextColor = textColor,
+                            unfocusedTextColor = textColor,
                             focusedBorderColor = secondaryGlow,
-                            unfocusedBorderColor = Color.White.copy(alpha = 0.1f)
+                            unfocusedBorderColor = textColor.copy(alpha = 0.15f)
                         )
                     )
                 }
@@ -1131,7 +1144,7 @@ fun DashboardView(
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = "Search Radius & Topic Filters",
-                                color = Color.White,
+                                color = textColor,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 13.sp
                             )
@@ -1139,7 +1152,7 @@ fun DashboardView(
                         Icon(
                             imageVector = if (showFiltersPanel) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                             contentDescription = "Toggle",
-                            tint = Color.LightGray,
+                            tint = textColor,
                             modifier = Modifier.size(18.dp)
                         )
                     }
@@ -1184,7 +1197,7 @@ fun DashboardView(
                                         colors = SliderDefaults.colors(
                                             thumbColor = primaryGlow,
                                             activeTrackColor = primaryGlow,
-                                            inactiveTrackColor = Color.White.copy(alpha = 0.1f)
+                                            inactiveTrackColor = textColor.copy(alpha = 0.15f)
                                         )
                                     )
                                 } else {
@@ -1214,7 +1227,7 @@ fun DashboardView(
                                         colors = SliderDefaults.colors(
                                             thumbColor = primaryGlow,
                                             activeTrackColor = primaryGlow,
-                                            inactiveTrackColor = Color.White.copy(alpha = 0.1f)
+                                            inactiveTrackColor = textColor.copy(alpha = 0.15f)
                                         )
                                     )
                                 }
@@ -1716,6 +1729,10 @@ fun ChatGuideCard(
     primaryGlow: Color,
     modifier: Modifier = Modifier
 ) {
+    val isLightMode = cardBgColor == Color.White
+    val textColor = if (isLightMode) Color(0xFF1F1D2C) else Color.White
+    val subTextColor = if (isLightMode) Color(0xFF6B6A7A) else Color.LightGray
+
     var questionText by remember { mutableStateOf("") }
     val keyboardController = LocalSoftwareKeyboardController.current
 
@@ -1729,7 +1746,7 @@ fun ChatGuideCard(
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
                 text = "Ask Tour Guide",
-                color = Color.White,
+                color = textColor,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -1772,12 +1789,12 @@ fun ChatGuideCard(
                                                 bottomEnd = if (isUser) 0.dp else 12.dp
                                             )
                                         )
-                                        .background(if (isUser) primaryGlow else Color.White.copy(alpha = 0.08f))
+                                        .background(if (isUser) primaryGlow else (if (isLightMode) Color.Black.copy(alpha = 0.05f) else Color.White.copy(alpha = 0.08f)))
                                         .padding(8.dp)
                                 ) {
                                     Text(
                                         text = msg.content ?: "",
-                                        color = Color.White,
+                                        color = if (isUser) Color.White else textColor,
                                         fontSize = 13.sp
                                     )
                                 }
@@ -1799,10 +1816,10 @@ fun ChatGuideCard(
                     placeholder = { Text("Ask about history, directions...", color = Color.Gray, fontSize = 13.sp) },
                     modifier = Modifier.weight(1f),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedBorderColor = Color.White.copy(alpha = 0.3f),
-                        unfocusedBorderColor = Color.White.copy(alpha = 0.1f)
+                        focusedTextColor = textColor,
+                        unfocusedTextColor = textColor,
+                        focusedBorderColor = textColor.copy(alpha = 0.3f),
+                        unfocusedBorderColor = textColor.copy(alpha = 0.15f)
                     ),
                     maxLines = 1,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
@@ -1922,7 +1939,7 @@ fun SettingsView(
     fetchedModels: List<String>,
     isFetchingModels: Boolean,
     onFetchModels: (String, String) -> Unit,
-    onSave: (String, String, String, String, Int, Long, String, Float, Float, Boolean, String, Boolean, String, String) -> Unit,
+    onSave: (String, String, String, String, Int, Long, String, Float, Float, Boolean, String, Boolean, String, Boolean) -> Unit,
     onSavePrompts: (String, String, String, String) -> Unit,
     cardBgColor: Color,
     primaryGlow: Color
@@ -1940,7 +1957,7 @@ fun SettingsView(
     var interests by remember { mutableStateOf(settings.interests) }
     var popularOnly by remember { mutableStateOf(settings.popularOnly) }
     var customPrompt by remember { mutableStateOf(settings.customPrompt) }
-    var isDarkModeActive by remember { mutableStateOf(settings.mapLayer != "light") }
+    var isDarkModeActive by remember { mutableStateOf(settings.isDarkMode) }
 
     var promptShort by remember { mutableStateOf(settings.promptShort) }
     var promptDetailed by remember { mutableStateOf(settings.promptDetailed) }
@@ -2471,7 +2488,7 @@ fun SettingsView(
                             interests,
                             popularOnly,
                             customPrompt,
-                            if (isDarkModeActive) "dark" else "light"
+                            isDarkModeActive
                         )
                     },
                     modifier = Modifier.fillMaxWidth(),

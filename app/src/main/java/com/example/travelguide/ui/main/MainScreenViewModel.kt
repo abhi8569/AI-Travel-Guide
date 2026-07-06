@@ -31,7 +31,8 @@ data class TourGuideUiState(
         promptDetailed = SettingsRepository.DEFAULT_PROMPT_DETAILED,
         promptInterestingFacts = SettingsRepository.DEFAULT_PROMPT_INTERESTING_FACTS,
         isGodModeActive = false,
-        godModeSearchRadius = 10
+        godModeSearchRadius = 10,
+        isDarkMode = true
     ),
     val currentLocation: UserLocation? = null,
     val nearbyPlaces: List<PlaceOfInterest> = emptyList(),
@@ -434,7 +435,8 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         autoPlay: Boolean,
         interests: String,
         popularOnly: Boolean,
-        customPrompt: String
+        customPrompt: String,
+        isDarkMode: Boolean
     ) {
         viewModelScope.launch {
             settingsRepository.updateSettings { current ->
@@ -457,7 +459,8 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                     promptDetailed = current.promptDetailed,
                     promptInterestingFacts = current.promptInterestingFacts,
                     isGodModeActive = current.isGodModeActive,
-                    godModeSearchRadius = current.godModeSearchRadius
+                    godModeSearchRadius = current.godModeSearchRadius,
+                    isDarkMode = isDarkMode
                 )
             }
         }
