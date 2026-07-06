@@ -263,8 +263,8 @@ fun LeafletMapView(
         if (zoomLevel < 11.5) {
             Box(
                 modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 16.dp)
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 16.dp)
                     .clip(RoundedCornerShape(50))
                     .background(Color(0xFF1F1D2C).copy(alpha = 0.9f))
                     .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(50))
@@ -506,8 +506,9 @@ fun MainScreen(
     }
 
     // Premium styling constants
-    val darkBgColor = Color(0xFF0F0E17) // Dark obsidian
-    val cardBgColor = Color(0xFF1F1D2C) // Glassy dark slate
+    val isLightMode = state.settings.mapLayer == "light"
+    val darkBgColor = if (isLightMode) Color(0xFFF2F1F6) else Color(0xFF0F0E17) // Light gray-blue vs Dark obsidian
+    val cardBgColor = if (isLightMode) Color(0xFFFFFFFF) else Color(0xFF1F1D2C) // Pristine white vs Glassy dark slate
     val primaryGlow = if (state.settings.isGodModeActive) Color(0xFFD500F9) else Color(0xFF6200EE) // Neon Magenta vs Royal Purple
     val secondaryGlow = if (state.settings.isGodModeActive) Color(0xFFFF007F) else Color(0xFF03DAC6) // Neon Pink vs Teal Accent
 
@@ -855,8 +856,9 @@ fun ContentArea(
                 fetchedModels = state.fetchedModels,
                 isFetchingModels = state.isFetchingModels,
                 onFetchModels = { url, key -> vm.fetchModelsList(url, key) },
-                onSave = { provider, apiKey, baseUrl, model, radius, freq, detail, rate, pitch, auto, interests, popular, customPrompt ->
+                onSave = { provider, apiKey, baseUrl, model, radius, freq, detail, rate, pitch, auto, interests, popular, customPrompt, mapLayer ->
                     vm.updateSettings(provider, apiKey, baseUrl, model, radius, freq, detail, rate, pitch, auto, interests, popular, customPrompt)
+                    vm.updateMapLayer(mapLayer)
                     onSettingsDismiss()
                 },
                 onSavePrompts = { base, sh, dt, inf ->
@@ -921,20 +923,17 @@ fun DashboardView(
             Tab(
                 selected = activeTab == 0,
                 onClick = { activeTab = 0 },
-                text = { Text("Map", fontWeight = FontWeight.Bold, fontSize = 14.sp) },
-                icon = { Icon(Icons.Default.Map, contentDescription = "Full Map") }
+                icon = { Icon(Icons.Default.Map, contentDescription = "Map View", modifier = Modifier.size(20.dp)) }
             )
             Tab(
                 selected = activeTab == 1,
                 onClick = { activeTab = 1 },
-                text = { Text("List View", fontWeight = FontWeight.Bold, fontSize = 14.sp) },
-                icon = { Icon(Icons.Default.Explore, contentDescription = "Discover Spots") }
+                icon = { Icon(Icons.Default.Explore, contentDescription = "List View", modifier = Modifier.size(20.dp)) }
             )
             Tab(
                 selected = activeTab == 2,
                 onClick = { activeTab = 2 },
-                text = { Text("Audio Guide", fontWeight = FontWeight.Bold, fontSize = 14.sp) },
-                icon = { Icon(Icons.Default.Hearing, contentDescription = "Narration and Chat") }
+                icon = { Icon(Icons.Default.Hearing, contentDescription = "Audio Guide", modifier = Modifier.size(20.dp)) }
             )
         }
 
@@ -1470,7 +1469,7 @@ fun ActiveGuideCard(
             ) {
                 Text(
                     text = place?.name ?: "Generating Tour Guide...",
-                    color = Color.White,
+                    color = if (cardBgColor == Color.White) Color(0xFF1C1B1F) else Color.White,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
@@ -1522,7 +1521,7 @@ fun ActiveGuideCard(
                         )
                         Text(
                             text = "${place.distance.toInt()}m $cardinal",
-                            color = Color.White,
+                            color = if (cardBgColor == Color.White) Color(0xFF1C1B1F) else Color.White,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -1553,7 +1552,7 @@ fun ActiveGuideCard(
                     ) {
                         Text(
                             text = level,
-                            color = if (selected) Color.White else Color.Gray,
+                            color = if (selected) (if (cardBgColor == Color.White) Color(0xFF1C1B1F) else Color.White) else Color.Gray,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -1584,7 +1583,7 @@ fun ActiveGuideCard(
                 ) {
                     Text(
                         text = guideContent ?: "",
-                        color = Color.LightGray,
+                        color = if (cardBgColor == Color.White) Color(0xFF1C1B1F) else Color.LightGray,
                         fontSize = 14.sp,
                         lineHeight = 20.sp,
                         modifier = Modifier
@@ -1872,13 +1871,13 @@ fun PlaceItem(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = place.name,
-                    color = Color.White,
+                    color = if (cardBgColor == Color.White) Color(0xFF1C1B1F) else Color.White,
                     fontWeight = FontWeight.Bold,
                     fontSize = 15.sp
                 )
                 Text(
                     text = place.category,
-                    color = Color.Gray,
+                    color = if (cardBgColor == Color.White) Color(0xFF6B6A7A) else Color.Gray,
                     fontSize = 12.sp
                 )
             }
@@ -1923,7 +1922,7 @@ fun SettingsView(
     fetchedModels: List<String>,
     isFetchingModels: Boolean,
     onFetchModels: (String, String) -> Unit,
-    onSave: (String, String, String, String, Int, Long, String, Float, Float, Boolean, String, Boolean, String) -> Unit,
+    onSave: (String, String, String, String, Int, Long, String, Float, Float, Boolean, String, Boolean, String, String) -> Unit,
     onSavePrompts: (String, String, String, String) -> Unit,
     cardBgColor: Color,
     primaryGlow: Color
@@ -1941,6 +1940,7 @@ fun SettingsView(
     var interests by remember { mutableStateOf(settings.interests) }
     var popularOnly by remember { mutableStateOf(settings.popularOnly) }
     var customPrompt by remember { mutableStateOf(settings.customPrompt) }
+    var isDarkModeActive by remember { mutableStateOf(settings.mapLayer != "light") }
 
     var promptShort by remember { mutableStateOf(settings.promptShort) }
     var promptDetailed by remember { mutableStateOf(settings.promptDetailed) }
@@ -2417,7 +2417,7 @@ fun SettingsView(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("Show Popular Spots Only", color = Color.White, fontSize = 13.sp)
+                        Text("Show Popular Spots Only", color = if (cardBgColor == Color.White) Color(0xFF1C1B1F) else Color.White, fontSize = 13.sp)
                         Switch(
                             checked = popularOnly,
                             onCheckedChange = { popularOnly = it },
@@ -2430,10 +2430,23 @@ fun SettingsView(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("Auto-Play Narration Proximity", color = Color.White, fontSize = 13.sp)
+                        Text("Auto-Play Narration Proximity", color = if (cardBgColor == Color.White) Color(0xFF1C1B1F) else Color.White, fontSize = 13.sp)
                         Switch(
                             checked = autoPlay,
                             onCheckedChange = { autoPlay = it },
+                            colors = SwitchDefaults.colors(checkedThumbColor = primaryGlow)
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Dark Mode Theme", color = if (cardBgColor == Color.White) Color(0xFF1C1B1F) else Color.White, fontSize = 13.sp)
+                        Switch(
+                            checked = isDarkModeActive,
+                            onCheckedChange = { isDarkModeActive = it },
                             colors = SwitchDefaults.colors(checkedThumbColor = primaryGlow)
                         )
                     }
@@ -2457,7 +2470,8 @@ fun SettingsView(
                             autoPlay,
                             interests,
                             popularOnly,
-                            customPrompt
+                            customPrompt,
+                            if (isDarkModeActive) "dark" else "light"
                         )
                     },
                     modifier = Modifier.fillMaxWidth(),
