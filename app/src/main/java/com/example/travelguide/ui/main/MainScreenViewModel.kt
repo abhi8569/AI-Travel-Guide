@@ -71,6 +71,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     private var lastNarrationTime = 0L
     private val guideCache = mutableMapOf<String, String>() // Local cache to save API bills
     private var rawNearbyPlaces = emptyList<PlaceOfInterest>()
+    private var lastQueriedLocation: UserLocation? = null
     private var activeRadius = 0
     private var activeInterval = 0L
 
@@ -623,6 +624,26 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         viewModelScope.launch {
             settingsRepository.updateLastLocation(lat, lon)
         }
+
+        // Auto-fetch local Atlas Obscura places dynamically as user pans the map (Airbnb pattern)
+        if (_uiState.value.settings.isGodModeActive && _uiState.value.isDatabaseDownloaded) {
+            val lastQ = lastQueriedLocation
+            val results = FloatArray(1)
+            if (lastQ == null) {
+                lastQueriedLocation = UserLocation(lat, lon, 0f)
+                viewModelScope.launch {
+                    searchPlacesNear(lat, lon, isAutoTrigger = true)
+                }
+            } else {
+                android.location.Location.distanceBetween(lastQ.latitude, lastQ.longitude, lat, lon, results)
+                if (results[0] >= 150f) { // Re-fetch only after panning more than 150 meters to prevent DB spam
+                    lastQueriedLocation = UserLocation(lat, lon, 0f)
+                    viewModelScope.launch {
+                        searchPlacesNear(lat, lon, isAutoTrigger = true)
+                    }
+                }
+            }
+        }
     }
 
     fun toggleMapSearchMode() {
@@ -654,6 +675,16 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
             _uiState.update { it.copy(dbDownloadProgress = 0f, dbDownloadError = null) }
             return
         }
+        stopSpeaking()
+        lastQueriedLocation = null
+        _uiState.update { 
+            it.copy(
+                nearbyPlaces = emptyList(),
+                activePlace = null,
+                guideContent = null,
+                isSpeaking = false
+            )
+        }
         viewModelScope.launch {
             settingsRepository.updateSettings { current ->
                 current.copy(isGodModeActive = active)
@@ -673,10 +704,15 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                         _uiState.update { it.copy(dbDownloadProgress = state.progress) }
                     }
                     is DownloadState.Success -> {
+                        stopSpeaking()
                         _uiState.update { 
                             it.copy(
                                 dbDownloadProgress = null,
-                                isDatabaseDownloaded = true
+                                isDatabaseDownloaded = true,
+                                nearbyPlaces = emptyList(),
+                                activePlace = null,
+                                guideContent = null,
+                                isSpeaking = false
                             ) 
                         }
                         settingsRepository.updateSettings { current ->

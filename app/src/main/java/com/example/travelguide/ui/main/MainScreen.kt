@@ -163,6 +163,7 @@ fun LeafletMapView(
     }
 
     var lastCenter by remember { mutableStateOf<GeoPoint?>(null) }
+    var zoomLevel by remember { mutableDoubleStateOf(mapView.zoomLevelDouble) }
 
     DisposableEffect(mapView) {
         val listener = object : org.osmdroid.events.MapListener {
@@ -175,6 +176,7 @@ fun LeafletMapView(
             override fun onZoom(event: org.osmdroid.events.ZoomEvent?): Boolean {
                 val center = mapView.mapCenter
                 lastCenter = GeoPoint(center.latitude, center.longitude)
+                zoomLevel = mapView.zoomLevelDouble
                 onMapCenterChanged(center.latitude, center.longitude)
                 return true
             }
@@ -195,7 +197,7 @@ fun LeafletMapView(
     }
 
     // Handle state updates natively and map updates smoothly on UI thread
-    LaunchedEffect(userLat, userLon, places) {
+    LaunchedEffect(userLat, userLon, places, zoomLevel) {
         mapView.overlays.clear()
 
         // Add user marker
@@ -210,34 +212,36 @@ fun LeafletMapView(
             mapView.overlays.add(userMarker)
         }
 
-        // Add place attraction markers
-        places.forEach { place ->
-            val placePoint = GeoPoint(place.lat, place.lon)
-            val placeMarker = Marker(mapView).apply {
-                position = placePoint
-                setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
-                title = place.name
-                subDescription = place.category
-                icon = placeMarkerIcon
-                setOnMarkerClickListener { marker, map ->
-                    val results = FloatArray(1)
-                    val nearbySpots = places.filter { other ->
-                        if (other.id == place.id) true
-                        else {
-                            android.location.Location.distanceBetween(place.lat, place.lon, other.lat, other.lon, results)
-                            results[0] <= 30f // 30 meters threshold
+        // Add place attraction markers (Only if zoomed in past threshold for clean Airbnb view)
+        if (zoomLevel >= 11.5) {
+            places.forEach { place ->
+                val placePoint = GeoPoint(place.lat, place.lon)
+                val placeMarker = Marker(mapView).apply {
+                    position = placePoint
+                    setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                    title = place.name
+                    subDescription = place.category
+                    icon = placeMarkerIcon
+                    setOnMarkerClickListener { marker, map ->
+                        val results = FloatArray(1)
+                        val nearbySpots = places.filter { other ->
+                            if (other.id == place.id) true
+                            else {
+                                android.location.Location.distanceBetween(place.lat, place.lon, other.lat, other.lon, results)
+                                results[0] <= 30f // 30 meters threshold
+                            }
                         }
+                        if (nearbySpots.size > 1) {
+                            overlappingPlacesToSelect = nearbySpots
+                        } else {
+                            onMarkerClick(place)
+                            marker.showInfoWindow()
+                        }
+                        true
                     }
-                    if (nearbySpots.size > 1) {
-                        overlappingPlacesToSelect = nearbySpots
-                    } else {
-                        onMarkerClick(place)
-                        marker.showInfoWindow()
-                    }
-                    true
                 }
+                mapView.overlays.add(placeMarker)
             }
-            mapView.overlays.add(placeMarker)
         }
 
         mapView.invalidate() // Native redraw invocation
@@ -256,7 +260,24 @@ fun LeafletMapView(
                 it.onDetach() // Cleanup tile downloading on dispose
             }
         )
-
+        if (zoomLevel < 11.5) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 16.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(Color(0xFF1F1D2C).copy(alpha = 0.9f))
+                    .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(50))
+                    .padding(horizontal = 14.dp, vertical = 6.dp)
+            ) {
+                Text(
+                    text = "🔍 Zoom in to view spots",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 11.sp
+                )
+            }
+        }
         // Floating overlay controls
         Column(
             modifier = Modifier
@@ -1625,27 +1646,25 @@ fun ActiveGuideCard(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Google Maps integration button
-                    Button(
+                    // Google Maps integration button (Icon-only to save horizontal space)
+                    IconButton(
                         onClick = { place?.let { openGoogleMaps(context, it) } },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.1f))
+                        colors = IconButtonDefaults.iconButtonColors(containerColor = Color.White.copy(alpha = 0.1f)),
+                        modifier = Modifier.size(36.dp)
                     ) {
-                        Icon(imageVector = Icons.Default.Map, contentDescription = "Open in Maps", tint = Color.White)
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Show Route", color = Color.White, fontSize = 12.sp)
+                        Icon(imageVector = Icons.Default.Directions, contentDescription = "Show Route", tint = Color.White, modifier = Modifier.size(18.dp))
                     }
 
                     val url = place?.tags?.get("url")
                     if (!url.isNullOrBlank()) {
                         Spacer(modifier = Modifier.width(8.dp))
                         val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
-                        Button(
+                        IconButton(
                             onClick = { uriHandler.openUri(url) },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.1f))
+                            colors = IconButtonDefaults.iconButtonColors(containerColor = Color.White.copy(alpha = 0.1f)),
+                            modifier = Modifier.size(36.dp)
                         ) {
-                            Icon(imageVector = Icons.Default.Language, contentDescription = "Open Web", tint = Color.White)
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Atlas Obscura", color = Color.White, fontSize = 12.sp)
+                            Icon(imageVector = Icons.Default.Language, contentDescription = "Atlas Obscura", tint = Color.White, modifier = Modifier.size(18.dp))
                         }
                     }
 
