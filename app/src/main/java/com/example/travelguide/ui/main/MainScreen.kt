@@ -118,6 +118,8 @@ fun LeafletMapView(
     onMapClick: () -> Unit = {}
 ) {
     val context = LocalContext.current
+    val currentInitialLat by rememberUpdatedState(initialCenterLat)
+    val currentInitialLon by rememberUpdatedState(initialCenterLon)
 
     // 1. Create a beautiful native user location marker icon (Teal circle with white border)
     val userMarkerIcon = remember {
@@ -160,8 +162,10 @@ fun LeafletMapView(
                 override fun onViewAttachedToWindow(v: android.view.View) {
                     v.invalidate()
                     post {
-                        if (initialCenterLat != null && initialCenterLon != null) {
-                            controller.setCenter(GeoPoint(initialCenterLat, initialCenterLon))
+                        val lat = currentInitialLat
+                        val lon = currentInitialLon
+                        if (lat != null && lon != null) {
+                            controller.setCenter(GeoPoint(lat, lon))
                         }
                     }
                 }
@@ -398,35 +402,7 @@ fun LeafletMapView(
             }
         }
 
-        // Map Layer Switcher (Aligned at bottom right, shifting up if detailed card is visible)
-        IconButton(
-            onClick = {
-                val nextLayer = when (currentLayer) {
-                    "dark" -> "light"
-                    "light" -> "satellite"
-                    else -> "dark"
-                }
-                onLayerChanged(nextLayer)
-            },
-            colors = IconButtonDefaults.iconButtonColors(
-                containerColor = Color(0xFF1F1D2C).copy(alpha = 0.8f)
-            ),
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .navigationBarsPadding()
-                .padding(
-                    end = 24.dp,
-                    bottom = if (activePlace != null) 124.dp else 24.dp
-                )
-                .size(40.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Default.Layers,
-                contentDescription = "Map Layers",
-                tint = Color.White,
-                modifier = Modifier.size(20.dp)
-            )
-        }
+
     }
 }
 
@@ -753,19 +729,38 @@ fun MainScreen(
 
                     Spacer(modifier = Modifier.width(8.dp))
 
-                    IconButton(
-                        onClick = {
-                            viewModel.toggleGodMode(!state.settings.isGodModeActive)
-                        },
-                        colors = IconButtonDefaults.iconButtonColors(
-                            containerColor = if (state.settings.isGodModeActive) primaryGlow.copy(alpha = 0.3f) else cardBgColor
-                        )
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(if (state.settings.isGodModeActive) primaryGlow.copy(alpha = 0.2f) else cardBgColor)
+                            .border(
+                                1.dp,
+                                if (state.settings.isGodModeActive) primaryGlow.copy(alpha = 0.4f) else Color.White.copy(alpha = 0.08f),
+                                RoundedCornerShape(16.dp)
+                            )
+                            .clickable {
+                                viewModel.toggleGodMode(!state.settings.isGodModeActive)
+                            }
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = if (state.settings.isGodModeActive) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                            contentDescription = "Toggle God Mode",
-                            tint = if (state.settings.isGodModeActive) secondaryGlow else textColor
-                        )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = if (state.settings.isGodModeActive) Icons.Default.AutoAwesome else Icons.Default.Explore,
+                                contentDescription = "Mode",
+                                tint = if (state.settings.isGodModeActive) secondaryGlow else textColor,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Text(
+                                text = if (state.settings.isGodModeActive) "God Mode" else "Standard",
+                                color = if (state.settings.isGodModeActive) Color.White else textColor,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
 
                     Spacer(modifier = Modifier.width(8.dp))
@@ -1157,6 +1152,62 @@ fun DashboardView(
                             ),
                             shape = RoundedCornerShape(20.dp)
                         )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Current Location snap/tracking button
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(if (state.locationTrackingActive) primaryGlow else cardBgColor.copy(alpha = 0.85f))
+                                .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(20.dp))
+                                .clickable {
+                                    // Snaps to user location and starts tracking
+                                    if (state.useMapCenter) {
+                                        onToggleMapSearchMode()
+                                    } else {
+                                        vm.toggleLocationTracking()
+                                    }
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = if (state.locationTrackingActive) Icons.Default.LocationOn else Icons.Default.LocationOff,
+                                contentDescription = "My Location Tracking",
+                                tint = if (state.locationTrackingActive) Color.White else secondaryGlow,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+
+                        // Map Layers Button
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(cardBgColor.copy(alpha = 0.85f))
+                                .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(20.dp))
+                                .clickable {
+                                    val nextLayer = when (state.settings.mapLayer) {
+                                        "dark" -> "light"
+                                        "light" -> "satellite"
+                                        else -> "dark"
+                                    }
+                                    onLayerChanged(nextLayer)
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Layers,
+                                contentDescription = "Map Layers",
+                                tint = secondaryGlow,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                     }
 
                     // 4. Expanded Filter & Radius panel!
@@ -1570,35 +1621,7 @@ fun ActiveGuideCard(
                     modifier = Modifier.padding(vertical = 2.dp)
                 )
 
-                // COMPASS Navigation Indicator inside Card
-                if (userLocation != null && place != null) {
-                    val bearing = calculateBearing(userLocation.latitude, userLocation.longitude, place.lat, place.lon)
-                    val arrowRotation = (bearing - deviceHeading + 360) % 360
-                    val cardinal = getCardinalDirection(bearing)
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(Color.White.copy(alpha = 0.05f))
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Navigation,
-                            contentDescription = "Compass Pointer",
-                            tint = secondaryGlow,
-                            modifier = Modifier
-                                .size(14.dp)
-                                .rotate(arrowRotation)
-                        )
-                        Text(
-                            text = "${place.distance.toInt()}m $cardinal",
-                            color = if (cardBgColor == Color.White) Color(0xFF1C1B1F) else Color.White,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
+
             }
 
             // Detail Level Segmented Selection Row

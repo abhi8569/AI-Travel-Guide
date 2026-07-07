@@ -86,7 +86,14 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         // Collect settings and update state
         viewModelScope.launch {
             settingsRepository.settingsFlow.collect { newSettings ->
+                val prevGodMode = _uiState.value.settings.isGodModeActive
                 _uiState.update { it.copy(settings = newSettings) }
+                
+                // If God Mode loaded on start, or toggled, trigger places update
+                if (newSettings.isGodModeActive != prevGodMode || (newSettings.isGodModeActive && _uiState.value.nearbyPlaces.isEmpty())) {
+                    refreshPlacesForCurrentState()
+                }
+
                 // Update TTS speed and pitch
                 ttsManager.setPitchAndSpeed(newSettings.speechRate, newSettings.speechPitch)
                 
@@ -763,6 +770,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                 activePlace = null,
                 guideContent = null,
                 isSpeaking = false,
+                useMapCenter = if (active) true else it.useMapCenter,
                 settings = it.settings.copy(isGodModeActive = active, interests = "")
             )
         }

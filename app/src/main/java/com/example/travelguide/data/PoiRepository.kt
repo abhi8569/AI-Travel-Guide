@@ -191,10 +191,10 @@ class PoiRepository {
         val finalMaxLon: Double
 
         if (minLat != null && maxLat != null && minLon != null && maxLon != null) {
-            finalMinLat = minLat
-            finalMaxLat = maxLat
-            finalMinLon = minLon
-            finalMaxLon = maxLon
+            finalMinLat = Math.min(minLat, maxLat)
+            finalMaxLat = Math.max(minLat, maxLat)
+            finalMinLon = Math.min(minLon, maxLon)
+            finalMaxLon = Math.max(minLon, maxLon)
         } else {
             val latDelta = radiusInKm / 111.0
             val lonDelta = radiusInKm / (111.0 * Math.cos(Math.toRadians(centerLat)))
