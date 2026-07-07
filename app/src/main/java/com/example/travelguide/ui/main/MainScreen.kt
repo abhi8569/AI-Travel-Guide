@@ -370,36 +370,13 @@ fun LeafletMapView(
                 )
             }
         }
-        // Floating overlay controls
+        // Floating top-right controls
         Column(
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Map Layer Switcher
-            IconButton(
-                onClick = {
-                    val nextLayer = when (currentLayer) {
-                        "dark" -> "light"
-                        "light" -> "satellite"
-                        else -> "dark"
-                    }
-                    onLayerChanged(nextLayer)
-                },
-                colors = IconButtonDefaults.iconButtonColors(
-                    containerColor = Color(0xFF1F1D2C).copy(alpha = 0.8f) // Translucent obsidian card
-                ),
-                modifier = Modifier.size(36.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Layers,
-                    contentDescription = "Map Layers",
-                    tint = Color.White,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-
             // Center on user position manually
             if (userLat != null && userLon != null) {
                 IconButton(
@@ -419,6 +396,35 @@ fun LeafletMapView(
                     )
                 }
             }
+        }
+
+        // Map Layer Switcher (Aligned at bottom right, shifting up if detailed card is visible)
+        IconButton(
+            onClick = {
+                val nextLayer = when (currentLayer) {
+                    "dark" -> "light"
+                    "light" -> "satellite"
+                    else -> "dark"
+                }
+                onLayerChanged(nextLayer)
+            },
+            colors = IconButtonDefaults.iconButtonColors(
+                containerColor = Color(0xFF1F1D2C).copy(alpha = 0.8f)
+            ),
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(
+                    end = 12.dp,
+                    bottom = if (activePlace != null) 110.dp else 12.dp
+                )
+                .size(36.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Layers,
+                contentDescription = "Map Layers",
+                tint = Color.White,
+                modifier = Modifier.size(20.dp)
+            )
         }
     }
 }
