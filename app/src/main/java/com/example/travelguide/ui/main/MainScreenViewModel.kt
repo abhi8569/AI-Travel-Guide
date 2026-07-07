@@ -475,6 +475,14 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
+    fun updateDarkMode(isDarkMode: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.updateSettings { current ->
+                current.copy(isDarkMode = isDarkMode)
+            }
+        }
+    }
+
     fun updateCustomPrompts(
         customPrompt: String,
         promptShort: String,

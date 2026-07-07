@@ -730,6 +730,23 @@ fun MainScreen(
                     Spacer(modifier = Modifier.width(8.dp))
 
                     IconButton(
+                        onClick = {
+                            viewModel.updateDarkMode(!state.settings.isDarkMode)
+                        },
+                        colors = IconButtonDefaults.iconButtonColors(
+                            containerColor = cardBgColor
+                        )
+                    ) {
+                        Icon(
+                            imageVector = if (state.settings.isDarkMode) Icons.Default.LightMode else Icons.Default.DarkMode,
+                            contentDescription = "Toggle Dark/Light Mode",
+                            tint = textColor
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    IconButton(
                         onClick = { showSettings = !showSettings },
                         colors = IconButtonDefaults.iconButtonColors(
                             containerColor = if (showSettings) primaryGlow else cardBgColor
