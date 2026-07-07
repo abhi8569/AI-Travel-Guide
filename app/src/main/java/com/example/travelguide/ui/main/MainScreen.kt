@@ -754,6 +754,23 @@ fun MainScreen(
                     Spacer(modifier = Modifier.width(8.dp))
 
                     IconButton(
+                        onClick = {
+                            viewModel.toggleGodMode(!state.settings.isGodModeActive)
+                        },
+                        colors = IconButtonDefaults.iconButtonColors(
+                            containerColor = if (state.settings.isGodModeActive) primaryGlow.copy(alpha = 0.3f) else cardBgColor
+                        )
+                    ) {
+                        Icon(
+                            imageVector = if (state.settings.isGodModeActive) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                            contentDescription = "Toggle God Mode",
+                            tint = if (state.settings.isGodModeActive) secondaryGlow else textColor
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    IconButton(
                         onClick = { showSettings = !showSettings },
                         colors = IconButtonDefaults.iconButtonColors(
                             containerColor = if (showSettings) primaryGlow else cardBgColor
@@ -768,68 +785,7 @@ fun MainScreen(
                 }
             }
 
-            AnimatedVisibility(
-                visible = !showSettings,
-                enter = fadeIn() + expandVertically(),
-                exit = fadeOut() + shrinkVertically()
-            ) {
-                // Mode Selector: Standard Mode | God Mode
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
-                        .background(cardBgColor, RoundedCornerShape(12.dp))
-                        .padding(4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .background(
-                                if (!state.settings.isGodModeActive) primaryGlow.copy(alpha = 0.2f) else Color.Transparent,
-                                RoundedCornerShape(8.dp)
-                            )
-                            .border(
-                                1.dp,
-                                if (!state.settings.isGodModeActive) primaryGlow.copy(alpha = 0.4f) else Color.Transparent,
-                                RoundedCornerShape(8.dp)
-                            )
-                            .clickable { viewModel.toggleGodMode(false) }
-                            .padding(vertical = 8.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "Standard Mode 🌍",
-                            color = if (!state.settings.isGodModeActive) Color.White else Color.Gray,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp
-                        )
-                    }
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .background(
-                                if (state.settings.isGodModeActive) primaryGlow.copy(alpha = 0.2f) else Color.Transparent,
-                                RoundedCornerShape(8.dp)
-                            )
-                            .border(
-                                1.dp,
-                                if (state.settings.isGodModeActive) primaryGlow.copy(alpha = 0.4f) else Color.Transparent,
-                                RoundedCornerShape(8.dp)
-                            )
-                            .clickable { viewModel.toggleGodMode(true) }
-                            .padding(vertical = 8.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "God Mode 👁️",
-                            color = if (state.settings.isGodModeActive) Color.White else Color.Gray,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp
-                        )
-                    }
-                }
-            }
+
 
             // Main Content Area
             ContentArea(
@@ -1033,34 +989,69 @@ fun DashboardView(
                 Modifier.size(0.dp)
             }
         ) {
-                LeafletMapView(
-                    userLat = state.currentLocation?.latitude,
-                    userLon = state.currentLocation?.longitude,
-                    places = state.nearbyPlaces,
-                    cardBgColor = cardBgColor,
-                    secondaryGlow = secondaryGlow,
-                    initialCenterLat = if (state.useMapCenter) {
-                        state.mapCenterLocation?.latitude ?: state.currentLocation?.latitude ?: 51.5074
-                    } else {
-                        state.currentLocation?.latitude ?: state.mapCenterLocation?.latitude ?: 51.5074
-                    },
-                    initialCenterLon = if (state.useMapCenter) {
-                        state.mapCenterLocation?.longitude ?: state.currentLocation?.longitude ?: -0.1278
-                    } else {
-                        state.currentLocation?.longitude ?: state.mapCenterLocation?.longitude ?: -0.1278
-                    },
-                    currentLayer = state.settings.mapLayer,
-                    onLayerChanged = onLayerChanged,
-                    mapResetTrigger = state.mapResetTrigger,
-                    activePlace = state.activePlace,
-                    isGodModeActive = state.settings.isGodModeActive,
-                    modifier = Modifier.fillMaxSize(),
-                    onMarkerClick = { place ->
-                        onSelectPlaceWithoutNarration(place)
-                    },
-                    onMapCenterChanged = onMapCenterChanged,
-                    onMapClick = { onSelectPlaceWithoutNarration(null) }
-                )
+                if (!state.settings.isGodModeActive) {
+                    key("standard_map") {
+                        LeafletMapView(
+                            userLat = state.currentLocation?.latitude,
+                            userLon = state.currentLocation?.longitude,
+                            places = state.nearbyPlaces,
+                            cardBgColor = cardBgColor,
+                            secondaryGlow = secondaryGlow,
+                            initialCenterLat = if (state.useMapCenter) {
+                                state.mapCenterLocation?.latitude ?: state.currentLocation?.latitude ?: 51.5074
+                            } else {
+                                state.currentLocation?.latitude ?: state.mapCenterLocation?.latitude ?: 51.5074
+                            },
+                            initialCenterLon = if (state.useMapCenter) {
+                                state.mapCenterLocation?.longitude ?: state.currentLocation?.longitude ?: -0.1278
+                            } else {
+                                state.currentLocation?.longitude ?: state.mapCenterLocation?.longitude ?: -0.1278
+                            },
+                            currentLayer = state.settings.mapLayer,
+                            onLayerChanged = onLayerChanged,
+                            mapResetTrigger = state.mapResetTrigger,
+                            activePlace = state.activePlace,
+                            isGodModeActive = false,
+                            modifier = Modifier.fillMaxSize(),
+                            onMarkerClick = { place ->
+                                onSelectPlaceWithoutNarration(place)
+                            },
+                            onMapCenterChanged = onMapCenterChanged,
+                            onMapClick = { onSelectPlaceWithoutNarration(null) }
+                        )
+                    }
+                } else {
+                    key("god_map") {
+                        LeafletMapView(
+                            userLat = state.currentLocation?.latitude,
+                            userLon = state.currentLocation?.longitude,
+                            places = state.nearbyPlaces,
+                            cardBgColor = cardBgColor,
+                            secondaryGlow = secondaryGlow,
+                            initialCenterLat = if (state.useMapCenter) {
+                                state.mapCenterLocation?.latitude ?: state.currentLocation?.latitude ?: 51.5074
+                            } else {
+                                state.currentLocation?.latitude ?: state.mapCenterLocation?.latitude ?: 51.5074
+                            },
+                            initialCenterLon = if (state.useMapCenter) {
+                                state.mapCenterLocation?.longitude ?: state.currentLocation?.longitude ?: -0.1278
+                            } else {
+                                state.currentLocation?.longitude ?: state.mapCenterLocation?.longitude ?: -0.1278
+                            },
+                            currentLayer = state.settings.mapLayer,
+                            onLayerChanged = onLayerChanged,
+                            mapResetTrigger = state.mapResetTrigger,
+                            activePlace = state.activePlace,
+                            isGodModeActive = true,
+                            modifier = Modifier.fillMaxSize(),
+                            onMarkerClick = { place ->
+                                onSelectPlaceWithoutNarration(place)
+                            },
+                            onMapCenterChanged = onMapCenterChanged,
+                            onMapClick = { onSelectPlaceWithoutNarration(null) }
+                        )
+                    }
+                }
 
                 // Dead Center Pin (only in Map Center search mode to indicate calculation center)
                 if (state.useMapCenter) {

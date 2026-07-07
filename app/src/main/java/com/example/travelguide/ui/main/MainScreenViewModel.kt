@@ -70,6 +70,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
 
     private var locationJob: Job? = null
     private var mapDebounceJob: Job? = null
+    private var saveLocationJob: Job? = null
     private val narratedPlaceIds = mutableSetOf<String>()
     private var lastNarrationTime = 0L
     private val guideCache = mutableMapOf<String, String>() // Local cache to save API bills
@@ -663,7 +664,9 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         viewportMinLon = minLon
         viewportMaxLon = maxLon
 
-        viewModelScope.launch {
+        saveLocationJob?.cancel()
+        saveLocationJob = viewModelScope.launch {
+            delay(1000)
             settingsRepository.updateLastLocation(lat, lon)
         }
 
