@@ -157,8 +157,8 @@ class SettingsRepository(private val context: Context) {
             }
         }
         .map { preferences ->
-            val lat = preferences[doublePreferencesKey("last_lat")] ?: 50.7333
-            val lon = preferences[doublePreferencesKey("last_lon")] ?: 7.1000
+            val lat = preferences[doublePreferencesKey("last_lat")] ?: 51.5074
+            val lon = preferences[doublePreferencesKey("last_lon")] ?: -0.1278
             Pair(lat, lon)
         }
 

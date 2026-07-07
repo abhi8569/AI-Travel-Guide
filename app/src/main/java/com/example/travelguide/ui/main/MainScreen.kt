@@ -113,7 +113,7 @@ fun LeafletMapView(
     activePlace: PlaceOfInterest? = null,
     modifier: Modifier = Modifier,
     onMarkerClick: (PlaceOfInterest) -> Unit = {},
-    onMapCenterChanged: (Double, Double) -> Unit = { _, _ -> },
+    onMapCenterChanged: (Double, Double, Double?, Double?, Double?, Double?) -> Unit = { _, _, _, _, _, _ -> },
     onMapClick: () -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -158,6 +158,11 @@ fun LeafletMapView(
             addOnAttachStateChangeListener(object : android.view.View.OnAttachStateChangeListener {
                 override fun onViewAttachedToWindow(v: android.view.View) {
                     v.invalidate()
+                    post {
+                        val center = mapCenter
+                        val box = boundingBox
+                        onMapCenterChanged(center.latitude, center.longitude, box.latSouth, box.latNorth, box.lonWest, box.lonEast)
+                    }
                 }
                 override fun onViewDetachedFromWindow(v: android.view.View) {}
             })
@@ -195,13 +200,19 @@ fun LeafletMapView(
     var lastCenter by remember { mutableStateOf<GeoPoint?>(null) }
     var zoomLevel by remember { mutableDoubleStateOf(mapView.zoomLevelDouble) }
 
+    val activeMarkers = remember { mutableMapOf<String, Marker>() }
+    var currentActiveMarker by remember { mutableStateOf<Marker?>(null) }
+    var currentUserMarker by remember { mutableStateOf<Marker?>(null) }
+    var currentEventsOverlay by remember { mutableStateOf<org.osmdroid.views.overlay.MapEventsOverlay?>(null) }
+
     DisposableEffect(mapView) {
         val listener = object : org.osmdroid.events.MapListener {
             override fun onScroll(event: org.osmdroid.events.ScrollEvent?): Boolean {
                 mapView.post {
                     val center = mapView.mapCenter
                     lastCenter = GeoPoint(center.latitude, center.longitude)
-                    onMapCenterChanged(center.latitude, center.longitude)
+                    val box = mapView.boundingBox
+                    onMapCenterChanged(center.latitude, center.longitude, box.latSouth, box.latNorth, box.lonWest, box.lonEast)
                 }
                 return true
             }
@@ -210,7 +221,8 @@ fun LeafletMapView(
                     val center = mapView.mapCenter
                     lastCenter = GeoPoint(center.latitude, center.longitude)
                     zoomLevel = mapView.zoomLevelDouble
-                    onMapCenterChanged(center.latitude, center.longitude)
+                    val box = mapView.boundingBox
+                    onMapCenterChanged(center.latitude, center.longitude, box.latSouth, box.latNorth, box.lonWest, box.lonEast)
                 }
                 return true
             }
@@ -233,56 +245,52 @@ fun LeafletMapView(
     val currentOnMapClick by rememberUpdatedState(onMapClick)
     // Handle state updates natively and map updates smoothly on UI thread
     LaunchedEffect(userLat, userLon, places, activePlace) {
-        mapView.overlays.clear()
-        org.osmdroid.views.overlay.infowindow.InfoWindow.closeAllInfoWindowsOn(mapView)
+        // Ensure events overlay is present
+        if (currentEventsOverlay == null) {
+            val eventsOverlay = org.osmdroid.views.overlay.MapEventsOverlay(object : org.osmdroid.events.MapEventsReceiver {
+                override fun singleTapConfirmedHelper(p: org.osmdroid.util.GeoPoint?): Boolean {
+                    currentOnMapClick()
+                    return true
+                }
+                override fun longPressHelper(p: org.osmdroid.util.GeoPoint?): Boolean {
+                    return false
+                }
+            })
+            mapView.overlays.add(eventsOverlay)
+            currentEventsOverlay = eventsOverlay
+        }
 
-        // Add map events overlay to detect background clicks
-        val eventsOverlay = org.osmdroid.views.overlay.MapEventsOverlay(object : org.osmdroid.events.MapEventsReceiver {
-            override fun singleTapConfirmedHelper(p: org.osmdroid.util.GeoPoint?): Boolean {
-                currentOnMapClick()
-                return true
-            }
-            override fun longPressHelper(p: org.osmdroid.util.GeoPoint?): Boolean {
-                return false
-            }
-        })
-        mapView.overlays.add(eventsOverlay)
-
-        // Add user marker
+        // Manage user marker
         if (userLat != null && userLon != null) {
             val userPoint = GeoPoint(userLat, userLon)
-            val userMarker = Marker(mapView).apply {
-                position = userPoint
-                setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
-                title = "You"
-                icon = userMarkerIcon
-            }
-            mapView.overlays.add(userMarker)
-        }
-
-        // Add place attraction markers (Always draw all points for simple, clean, non-flickering standard style)
-        places.forEach { place ->
-            if (place.id == activePlace?.id) return@forEach // skip drawing normal marker, we draw it highlighted below!
-            val placePoint = GeoPoint(place.lat, place.lon)
-            val placeMarker = Marker(mapView).apply {
-                position = placePoint
-                setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
-                title = place.name
-                subDescription = place.category
-                icon = placeMarkerIcon
-                setOnMarkerClickListener { marker, map ->
-                    onMarkerClick(place)
-                    marker.showInfoWindow()
-                    true
+            val userM = currentUserMarker
+            if (userM == null) {
+                val newUserM = Marker(mapView).apply {
+                    position = userPoint
+                    setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                    title = "You"
+                    icon = userMarkerIcon
                 }
+                mapView.overlays.add(newUserM)
+                currentUserMarker = newUserM
+            } else {
+                userM.position = userPoint
             }
-            mapView.overlays.add(placeMarker)
+        } else {
+            currentUserMarker?.let {
+                mapView.overlays.remove(it)
+                currentUserMarker = null
+            }
         }
 
-        // Always add the active selected place marker if it exists so it never disappears on zoom/pan
+        // Manage active place marker
+        currentActiveMarker?.let {
+            mapView.overlays.remove(it)
+            currentActiveMarker = null
+        }
         if (activePlace != null) {
             val activePoint = GeoPoint(activePlace.lat, activePlace.lon)
-            val activeMarker = Marker(mapView).apply {
+            val newActiveM = Marker(mapView).apply {
                 position = activePoint
                 setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
                 title = activePlace.name
@@ -294,10 +302,43 @@ fun LeafletMapView(
                     true
                 }
             }
-            mapView.overlays.add(activeMarker)
+            mapView.overlays.add(newActiveM)
+            currentActiveMarker = newActiveM
         }
 
-        mapView.invalidate() // Native redraw invocation
+        // Manage regular place markers
+        val newPlaceIds = places.map { it.id }.toSet()
+        val iterator = activeMarkers.entries.iterator()
+        while (iterator.hasNext()) {
+            val entry = iterator.next()
+            if (!newPlaceIds.contains(entry.key) || entry.key == activePlace?.id) {
+                mapView.overlays.remove(entry.value)
+                iterator.remove()
+            }
+        }
+
+        places.forEach { place ->
+            if (place.id == activePlace?.id) return@forEach
+            if (!activeMarkers.containsKey(place.id)) {
+                val placePoint = GeoPoint(place.lat, place.lon)
+                val placeMarker = Marker(mapView).apply {
+                    position = placePoint
+                    setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                    title = place.name
+                    subDescription = place.category
+                    icon = placeMarkerIcon
+                    setOnMarkerClickListener { marker, map ->
+                        onMarkerClick(place)
+                        marker.showInfoWindow()
+                        true
+                    }
+                }
+                mapView.overlays.add(placeMarker)
+                activeMarkers[place.id] = placeMarker
+            }
+        }
+
+        mapView.invalidate()
     }
 
     Box(
@@ -796,7 +837,7 @@ fun ContentArea(
                 onSendMessage = { vm.sendChatMessage(it) },
                 onSpeechRateChange = { vm.updateSpeechRate(it) },
                 onSearchCustomLocation = { vm.searchCustomLocation(it) },
-                onMapCenterChanged = { lat, lon -> vm.updateMapCenterLocation(lat, lon) },
+                onMapCenterChanged = { lat, lon, minLat, maxLat, minLon, maxLon -> vm.updateMapCenterLocation(lat, lon, minLat, maxLat, minLon, maxLon) },
                 onToggleMapSearchMode = onToggleMapSearchMode,
                 onScanMapCenterArea = { vm.scanMapCenterArea() },
                 onDetailLevelChange = { vm.changeDetailLevelAndRegenerate(it) },
@@ -862,7 +903,7 @@ fun DashboardView(
     onSendMessage: (String) -> Unit,
     onSpeechRateChange: (Float) -> Unit,
     onSearchCustomLocation: (String) -> Unit,
-    onMapCenterChanged: (Double, Double) -> Unit,
+    onMapCenterChanged: (Double, Double, Double?, Double?, Double?, Double?) -> Unit,
     onToggleMapSearchMode: () -> Unit,
     onScanMapCenterArea: () -> Unit,
     onDetailLevelChange: (String) -> Unit,
@@ -876,6 +917,10 @@ fun DashboardView(
     val isLightMode = !state.settings.isDarkMode
     val textColor = if (isLightMode) Color(0xFF1F1D2C) else Color.White
     val subTextColor = if (isLightMode) Color(0xFF6B6A7A) else Color.LightGray
+
+    androidx.activity.compose.BackHandler(enabled = state.activePlace != null) {
+        onSelectPlaceWithoutNarration(null)
+    }
 
     var activeTab by remember { mutableIntStateOf(0) } // 0: Map, 1: Discover, 2: Audio Guide
     var showFiltersPanel by remember { mutableStateOf(false) }
@@ -939,8 +984,8 @@ fun DashboardView(
                     places = state.nearbyPlaces,
                     cardBgColor = cardBgColor,
                     secondaryGlow = secondaryGlow,
-                    initialCenterLat = state.mapCenterLocation?.latitude ?: state.currentLocation?.latitude ?: 50.7333,
-                    initialCenterLon = state.mapCenterLocation?.longitude ?: state.currentLocation?.longitude ?: 7.1000,
+                    initialCenterLat = state.mapCenterLocation?.latitude ?: state.currentLocation?.latitude ?: 51.5074,
+                    initialCenterLon = state.mapCenterLocation?.longitude ?: state.currentLocation?.longitude ?: -0.1278,
                     currentLayer = state.settings.mapLayer,
                     onLayerChanged = onLayerChanged,
                     mapResetTrigger = state.mapResetTrigger,
@@ -1156,8 +1201,8 @@ fun DashboardView(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // Scan Area Button Floating overlay (Visible only when no spot is selected to maximize map space)
-                    if (state.activePlace == null) {
+                    // Scan Area Button Floating overlay (Visible only when no spot is selected and NOT in God Mode to maximize map space)
+                    if (state.activePlace == null && !state.settings.isGodModeActive) {
                         Button(
                             onClick = { onScanMapCenterArea() },
                             colors = ButtonDefaults.buttonColors(containerColor = primaryGlow),
@@ -1170,18 +1215,18 @@ fun DashboardView(
                         }
                     }
 
-                    // Floating Detailed Card at bottom of map for active spot selection
+                    // Floating Detailed Card at bottom of map for active spot selection (Sleek and highly optimized for size)
                     state.activePlace?.let { place ->
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             colors = CardDefaults.cardColors(containerColor = cardBgColor.copy(alpha = 0.95f)),
-                            shape = RoundedCornerShape(16.dp),
-                            elevation = CardDefaults.cardElevation(8.dp)
+                            shape = RoundedCornerShape(14.dp),
+                            elevation = CardDefaults.cardElevation(6.dp)
                         ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Text(place.name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                                Text(place.category, color = Color.Gray, fontSize = 13.sp)
-                                Spacer(modifier = Modifier.height(8.dp))
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Text(place.name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                Text(place.category, color = Color.Gray, fontSize = 11.sp)
+                                Spacer(modifier = Modifier.height(4.dp))
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -1190,7 +1235,7 @@ fun DashboardView(
                                     // Distance & Direction info
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                                     ) {
                                         val distText = if (place.distance >= 1000f) {
                                             String.format("%.1f km", place.distance / 1000f)
@@ -1201,19 +1246,19 @@ fun DashboardView(
                                             text = distText,
                                             color = secondaryGlow,
                                             fontWeight = FontWeight.Bold,
-                                            fontSize = 13.sp
+                                            fontSize = 12.sp
                                         )
 
                                         val context = LocalContext.current
                                         IconButton(
                                             onClick = { openGoogleMaps(context, place) },
-                                            modifier = Modifier.size(36.dp)
+                                            modifier = Modifier.size(28.dp)
                                         ) {
                                             Icon(
                                                 imageVector = Icons.Default.Directions,
                                                 contentDescription = "Get Directions",
                                                 tint = Color.White,
-                                                modifier = Modifier.size(20.dp)
+                                                modifier = Modifier.size(16.dp)
                                             )
                                         }
                                     }
@@ -1221,7 +1266,7 @@ fun DashboardView(
                                     // Action buttons (Website link in God Mode, Hear Guide in both)
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                                     ) {
                                         if (state.settings.isGodModeActive) {
                                             val url = place.tags["url"] ?: place.tags["website"]
@@ -1229,13 +1274,13 @@ fun DashboardView(
                                                 val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
                                                 IconButton(
                                                     onClick = { uriHandler.openUri(url) },
-                                                    modifier = Modifier.size(36.dp)
+                                                    modifier = Modifier.size(28.dp)
                                                 ) {
                                                     Icon(
                                                         imageVector = Icons.Default.Language,
                                                         contentDescription = "Open Web Link",
                                                         tint = Color.White,
-                                                        modifier = Modifier.size(18.dp)
+                                                        modifier = Modifier.size(16.dp)
                                                     )
                                                 }
                                             }
@@ -1245,11 +1290,13 @@ fun DashboardView(
                                                 onPlaceSelect(place) // triggers narration and guide generation
                                                 activeTab = 2 // switches to Audio Guide tab
                                             },
-                                            colors = ButtonDefaults.buttonColors(containerColor = primaryGlow)
+                                            colors = ButtonDefaults.buttonColors(containerColor = primaryGlow),
+                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                            shape = RoundedCornerShape(10.dp)
                                         ) {
-                                            Icon(Icons.Default.Hearing, contentDescription = null, modifier = Modifier.size(16.dp))
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Text("Hear Guide", fontSize = 12.sp)
+                                            Icon(Icons.Default.Hearing, contentDescription = null, modifier = Modifier.size(12.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text("Hear Guide", fontSize = 11.sp)
                                         }
                                     }
                                 }

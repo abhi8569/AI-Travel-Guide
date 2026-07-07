@@ -196,6 +196,9 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                             it.copy(currentLocation = location)
                         }
                     }
+                    viewModelScope.launch {
+                        settingsRepository.updateLastLocation(location.latitude, location.longitude)
+                    }
                     if (!_uiState.value.useMapCenter) {
                         searchPlacesNear(location.latitude, location.longitude, isAutoTrigger = true)
                     }
@@ -240,7 +243,11 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                 context = getApplication(),
                 centerLat = lat,
                 centerLon = lon,
-                radiusInKm = settings.godModeSearchRadius.toDouble()
+                radiusInKm = settings.godModeSearchRadius.toDouble(),
+                minLat = viewportMinLat,
+                maxLat = viewportMaxLat,
+                minLon = viewportMinLon,
+                maxLon = viewportMaxLon
             )
         } else {
             poiRepository.fetchNearbyPlaces(lat, lon, settings.searchRadius)
@@ -612,6 +619,9 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                         mapResetTrigger = it.mapResetTrigger + 1
                     ) 
                 }
+                viewModelScope.launch {
+                    settingsRepository.updateLastLocation(coords.first, coords.second)
+                }
                 searchPlacesNear(coords.first, coords.second)
             } else {
                 _uiState.update { 
@@ -624,8 +634,25 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
-    fun updateMapCenterLocation(lat: Double, lon: Double) {
+    private var viewportMinLat: Double? = null
+    private var viewportMaxLat: Double? = null
+    private var viewportMinLon: Double? = null
+    private var viewportMaxLon: Double? = null
+
+    fun updateMapCenterLocation(
+        lat: Double,
+        lon: Double,
+        minLat: Double? = null,
+        maxLat: Double? = null,
+        minLon: Double? = null,
+        maxLon: Double? = null
+    ) {
         _uiState.update { it.copy(mapCenterLocation = UserLocation(lat, lon, 0f)) }
+        viewportMinLat = minLat
+        viewportMaxLat = maxLat
+        viewportMinLon = minLon
+        viewportMaxLon = maxLon
+
         viewModelScope.launch {
             settingsRepository.updateLastLocation(lat, lon)
         }

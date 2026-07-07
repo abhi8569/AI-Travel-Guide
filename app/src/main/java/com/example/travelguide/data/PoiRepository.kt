@@ -176,18 +176,33 @@ class PoiRepository {
         context: android.content.Context,
         centerLat: Double,
         centerLon: Double,
-        radiusInKm: Double
+        radiusInKm: Double,
+        minLat: Double? = null,
+        maxLat: Double? = null,
+        minLon: Double? = null,
+        maxLon: Double? = null
     ): List<PlaceOfInterest> {
         val dbFile = getDatabaseFile(context)
         if (!dbFile.exists()) return emptyList()
 
-        val latDelta = radiusInKm / 111.0
-        val lonDelta = radiusInKm / (111.0 * Math.cos(Math.toRadians(centerLat)))
+        val finalMinLat: Double
+        val finalMaxLat: Double
+        val finalMinLon: Double
+        val finalMaxLon: Double
 
-        val minLat = centerLat - latDelta
-        val maxLat = centerLat + latDelta
-        val minLon = centerLon - lonDelta
-        val maxLon = centerLon + lonDelta
+        if (minLat != null && maxLat != null && minLon != null && maxLon != null) {
+            finalMinLat = minLat
+            finalMaxLat = maxLat
+            finalMinLon = minLon
+            finalMaxLon = maxLon
+        } else {
+            val latDelta = radiusInKm / 111.0
+            val lonDelta = radiusInKm / (111.0 * Math.cos(Math.toRadians(centerLat)))
+            finalMinLat = centerLat - latDelta
+            finalMaxLat = centerLat + latDelta
+            finalMinLon = centerLon - lonDelta
+            finalMaxLon = centerLon + lonDelta
+        }
 
         val list = mutableListOf<PlaceOfInterest>()
         var db: android.database.sqlite.SQLiteDatabase? = null
@@ -201,7 +216,7 @@ class PoiRepository {
             )
             cursor = db.rawQuery(
                 "SELECT id, title, subtitle, lat, lng, description, tags, url FROM places WHERE lat BETWEEN ? AND ? AND lng BETWEEN ? AND ?",
-                arrayOf(minLat.toString(), maxLat.toString(), minLon.toString(), maxLon.toString())
+                arrayOf(finalMinLat.toString(), finalMaxLat.toString(), finalMinLon.toString(), finalMaxLon.toString())
             )
 
             while (cursor.moveToNext()) {
