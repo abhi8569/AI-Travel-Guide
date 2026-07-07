@@ -525,12 +525,20 @@ fun MainScreen(
 
     // Premium styling constants
     val isLightMode = !state.settings.isDarkMode
-    val darkBgColor = if (isLightMode) Color(0xFFF2F1F6) else Color(0xFF0F0E17) // Light gray-blue vs Dark obsidian
-    val cardBgColor = if (isLightMode) Color(0xFFFFFFFF) else Color(0xFF1F1D2C) // Pristine white vs Glassy dark slate
-    val primaryGlow = if (state.settings.isGodModeActive) Color(0xFFD500F9) else Color(0xFF6200EE) // Neon Magenta vs Royal Purple
-    val secondaryGlow = if (state.settings.isGodModeActive) Color(0xFFFF007F) else Color(0xFF03DAC6) // Neon Pink vs Teal Accent
-    val textColor = if (isLightMode) Color(0xFF1F1D2C) else Color.White
-    val subTextColor = if (isLightMode) Color(0xFF6B6A7A) else Color.LightGray
+    val darkBgColor = if (isLightMode) Color(0xFFF3F4F6) else Color(0xFF000000) // Light grey-blue vs OLED black
+    val cardBgColor = if (isLightMode) Color(0xFFFFFFFF) else Color(0xFF121212) // Pristine white vs Slate grey
+    val primaryGlow = if (state.settings.isGodModeActive) {
+        if (isLightMode) Color(0xFFD500F9) else Color(0xFFE040FB)
+    } else {
+        if (isLightMode) Color(0xFF4F46E5) else Color(0xFF7C4DFF)
+    }
+    val secondaryGlow = if (state.settings.isGodModeActive) {
+        if (isLightMode) Color(0xFFC2185B) else Color(0xFFFF4081)
+    } else {
+        if (isLightMode) Color(0xFF0D9488) else Color(0xFF00E5FF)
+    }
+    val textColor = if (isLightMode) Color(0xFF111827) else Color(0xFFFFFFFF) // Dark Charcoal vs Crisp White
+    val subTextColor = if (isLightMode) Color(0xFF4B5563) else Color(0xFFB3B3B3) // Deep Muted Gray vs High-contrast Silver
 
     LaunchedEffect(isLightMode) {
         val activity = context.findActivity() ?: return@LaunchedEffect
@@ -835,8 +843,8 @@ fun ContentArea(
     modifier: Modifier = Modifier
 ) {
     val isLightMode = !state.settings.isDarkMode
-    val textColor = if (isLightMode) Color(0xFF1F1D2C) else Color.White
-    val subTextColor = if (isLightMode) Color(0xFF6B6A7A) else Color.LightGray
+    val textColor = if (isLightMode) Color(0xFF111827) else Color(0xFFFFFFFF)
+    val subTextColor = if (isLightMode) Color(0xFF4B5563) else Color(0xFFB3B3B3)
 
     Box(modifier = modifier) {
         AnimatedVisibility(
@@ -932,8 +940,8 @@ fun DashboardView(
     vm: MainScreenViewModel
 ) {
     val isLightMode = !state.settings.isDarkMode
-    val textColor = if (isLightMode) Color(0xFF1F1D2C) else Color.White
-    val subTextColor = if (isLightMode) Color(0xFF6B6A7A) else Color.LightGray
+    val textColor = if (isLightMode) Color(0xFF111827) else Color(0xFFFFFFFF)
+    val subTextColor = if (isLightMode) Color(0xFF4B5563) else Color(0xFFB3B3B3)
 
     androidx.activity.compose.BackHandler(enabled = state.activePlace != null) {
         onSelectPlaceWithoutNarration(null)
@@ -1752,8 +1760,8 @@ fun ChatGuideCard(
     modifier: Modifier = Modifier
 ) {
     val isLightMode = cardBgColor == Color.White
-    val textColor = if (isLightMode) Color(0xFF1F1D2C) else Color.White
-    val subTextColor = if (isLightMode) Color(0xFF6B6A7A) else Color.LightGray
+    val textColor = if (isLightMode) Color(0xFF111827) else Color(0xFFFFFFFF)
+    val subTextColor = if (isLightMode) Color(0xFF4B5563) else Color(0xFFB3B3B3)
 
     var questionText by remember { mutableStateOf("") }
     val keyboardController = LocalSoftwareKeyboardController.current
