@@ -160,9 +160,9 @@ fun LeafletMapView(
                 override fun onViewAttachedToWindow(v: android.view.View) {
                     v.invalidate()
                     post {
-                        val center = mapCenter
-                        val box = boundingBox
-                        onMapCenterChanged(center.latitude, center.longitude, zoomLevelDouble, box.latSouth, box.latNorth, box.lonWest, box.lonEast)
+                        if (initialCenterLat != null && initialCenterLon != null) {
+                            controller.setCenter(GeoPoint(initialCenterLat, initialCenterLon))
+                        }
                     }
                 }
                 override fun onViewDetachedFromWindow(v: android.view.View) {}
@@ -1039,8 +1039,16 @@ fun DashboardView(
                     places = state.nearbyPlaces,
                     cardBgColor = cardBgColor,
                     secondaryGlow = secondaryGlow,
-                    initialCenterLat = state.mapCenterLocation?.latitude ?: state.currentLocation?.latitude ?: 51.5074,
-                    initialCenterLon = state.mapCenterLocation?.longitude ?: state.currentLocation?.longitude ?: -0.1278,
+                    initialCenterLat = if (state.useMapCenter) {
+                        state.mapCenterLocation?.latitude ?: state.currentLocation?.latitude ?: 51.5074
+                    } else {
+                        state.currentLocation?.latitude ?: state.mapCenterLocation?.latitude ?: 51.5074
+                    },
+                    initialCenterLon = if (state.useMapCenter) {
+                        state.mapCenterLocation?.longitude ?: state.currentLocation?.longitude ?: -0.1278
+                    } else {
+                        state.currentLocation?.longitude ?: state.mapCenterLocation?.longitude ?: -0.1278
+                    },
                     currentLayer = state.settings.mapLayer,
                     onLayerChanged = onLayerChanged,
                     mapResetTrigger = state.mapResetTrigger,
