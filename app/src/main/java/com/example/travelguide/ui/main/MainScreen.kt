@@ -413,11 +413,12 @@ fun LeafletMapView(
             ),
             modifier = Modifier
                 .align(Alignment.BottomEnd)
+                .navigationBarsPadding()
                 .padding(
-                    end = 12.dp,
-                    bottom = if (activePlace != null) 110.dp else 12.dp
+                    end = 24.dp,
+                    bottom = if (activePlace != null) 124.dp else 24.dp
                 )
-                .size(36.dp)
+                .size(40.dp)
         ) {
             Icon(
                 imageVector = Icons.Default.Layers,
@@ -767,60 +768,66 @@ fun MainScreen(
                 }
             }
 
-            // Mode Selector: Standard Mode | God Mode
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
-                    .background(cardBgColor, RoundedCornerShape(12.dp))
-                    .padding(4.dp),
-                verticalAlignment = Alignment.CenterVertically
+            AnimatedVisibility(
+                visible = !showSettings,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
             ) {
-                Box(
+                // Mode Selector: Standard Mode | God Mode
+                Row(
                     modifier = Modifier
-                        .weight(1f)
-                        .background(
-                            if (!state.settings.isGodModeActive) primaryGlow.copy(alpha = 0.2f) else Color.Transparent,
-                            RoundedCornerShape(8.dp)
-                        )
-                        .border(
-                            1.dp,
-                            if (!state.settings.isGodModeActive) primaryGlow.copy(alpha = 0.4f) else Color.Transparent,
-                            RoundedCornerShape(8.dp)
-                        )
-                        .clickable { viewModel.toggleGodMode(false) }
-                        .padding(vertical = 8.dp),
-                    contentAlignment = Alignment.Center
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
+                        .background(cardBgColor, RoundedCornerShape(12.dp))
+                        .padding(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "Standard Mode 🌍",
-                        color = if (!state.settings.isGodModeActive) Color.White else Color.Gray,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp
-                    )
-                }
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .background(
-                            if (state.settings.isGodModeActive) primaryGlow.copy(alpha = 0.2f) else Color.Transparent,
-                            RoundedCornerShape(8.dp)
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .background(
+                                if (!state.settings.isGodModeActive) primaryGlow.copy(alpha = 0.2f) else Color.Transparent,
+                                RoundedCornerShape(8.dp)
+                            )
+                            .border(
+                                1.dp,
+                                if (!state.settings.isGodModeActive) primaryGlow.copy(alpha = 0.4f) else Color.Transparent,
+                                RoundedCornerShape(8.dp)
+                            )
+                            .clickable { viewModel.toggleGodMode(false) }
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Standard Mode 🌍",
+                            color = if (!state.settings.isGodModeActive) Color.White else Color.Gray,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp
                         )
-                        .border(
-                            1.dp,
-                            if (state.settings.isGodModeActive) primaryGlow.copy(alpha = 0.4f) else Color.Transparent,
-                            RoundedCornerShape(8.dp)
+                    }
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .background(
+                                if (state.settings.isGodModeActive) primaryGlow.copy(alpha = 0.2f) else Color.Transparent,
+                                RoundedCornerShape(8.dp)
+                            )
+                            .border(
+                                1.dp,
+                                if (state.settings.isGodModeActive) primaryGlow.copy(alpha = 0.4f) else Color.Transparent,
+                                RoundedCornerShape(8.dp)
+                            )
+                            .clickable { viewModel.toggleGodMode(true) }
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "God Mode 👁️",
+                            color = if (state.settings.isGodModeActive) Color.White else Color.Gray,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp
                         )
-                        .clickable { viewModel.toggleGodMode(true) }
-                        .padding(vertical = 8.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "God Mode 👁️",
-                        color = if (state.settings.isGodModeActive) Color.White else Color.Gray,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp
-                    )
+                    }
                 }
             }
 
