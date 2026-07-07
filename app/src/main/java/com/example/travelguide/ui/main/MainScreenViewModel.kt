@@ -76,6 +76,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     private val guideCache = mutableMapOf<String, String>() // Local cache to save API bills
     private var rawNearbyPlaces = emptyList<PlaceOfInterest>()
     private var lastQueriedLocation: UserLocation? = null
+    private var lastQueriedZoom: Double = 0.0
     private var activeRadius = 0
     private var activeInterval = 0L
 
@@ -149,6 +150,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     private fun filterPlaces(places: List<PlaceOfInterest>, settings: TourGuideSettings): List<PlaceOfInterest> {
+        if (settings.isGodModeActive) return places
         val disabledInterests = settings.interests.split(",").map { it.trim().lowercase() }.filter { it.isNotEmpty() }
         
         return places.filter { place ->
@@ -257,7 +259,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                 maxLat = viewportMaxLat,
                 minLon = viewportMinLon,
                 maxLon = viewportMaxLon
-            )
+            ).take(60)
         } else {
             poiRepository.fetchNearbyPlaces(lat, lon, settings.searchRadius)
         }
@@ -687,18 +689,24 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                 return
             }
             mapDebounceJob = viewModelScope.launch {
-                delay(600) // Wait for map to settle (idle)
+                delay(300) // Much more responsive panning/zooming settle time
                 val lastQ = lastQueriedLocation
+                val lastZ = lastQueriedZoom
                 val results = FloatArray(1)
-                if (lastQ == null) {
-                    lastQueriedLocation = UserLocation(lat, lon, 0f)
-                    searchPlacesNear(lat, lon, isAutoTrigger = true)
+                
+                val shouldQuery = if (lastQ == null) {
+                    true
                 } else {
                     android.location.Location.distanceBetween(lastQ.latitude, lastQ.longitude, lat, lon, results)
-                    if (results[0] >= 150f) { // Re-fetch only after panning more than 150 meters
-                        lastQueriedLocation = UserLocation(lat, lon, 0f)
-                        searchPlacesNear(lat, lon, isAutoTrigger = true)
-                    }
+                    val distanceChanged = results[0] >= 150f
+                    val zoomChanged = Math.abs(zoom - lastZ) >= 0.2
+                    distanceChanged || zoomChanged
+                }
+
+                if (shouldQuery) {
+                    lastQueriedLocation = UserLocation(lat, lon, 0f)
+                    lastQueriedZoom = zoom
+                    searchPlacesNear(lat, lon, isAutoTrigger = true)
                 }
             }
         }
