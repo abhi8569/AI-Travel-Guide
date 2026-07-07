@@ -924,12 +924,16 @@ fun DashboardView(
     val textColor = if (isLightMode) Color(0xFF111827) else Color(0xFFFFFFFF)
     val subTextColor = if (isLightMode) Color(0xFF4B5563) else Color(0xFFB3B3B3)
 
-    androidx.activity.compose.BackHandler(enabled = state.activePlace != null) {
-        onSelectPlaceWithoutNarration(null)
-    }
-
     var activeTab by remember { mutableIntStateOf(0) } // 0: Map, 1: Discover, 2: Audio Guide
     var showFiltersPanel by remember { mutableStateOf(false) }
+
+    androidx.activity.compose.BackHandler(enabled = showFiltersPanel || state.activePlace != null) {
+        if (showFiltersPanel) {
+            showFiltersPanel = false
+        } else if (state.activePlace != null) {
+            onSelectPlaceWithoutNarration(null)
+        }
+    }
 
     // Auto-switch to Audio Guide tab ONLY when narration is active or is generating
     LaunchedEffect(state.guideContent, state.isGeneratingGuide) {
@@ -2533,18 +2537,7 @@ fun SettingsView(
                         )
                     }
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text("Dark Mode Theme", color = if (cardBgColor == Color.White) Color(0xFF1C1B1F) else Color.White, fontSize = 13.sp)
-                        Switch(
-                            checked = isDarkModeActive,
-                            onCheckedChange = { isDarkModeActive = it },
-                            colors = SwitchDefaults.colors(checkedThumbColor = primaryGlow)
-                        )
-                    }
+
                 }
             }
 
