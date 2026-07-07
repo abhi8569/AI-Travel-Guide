@@ -185,24 +185,12 @@ class PoiRepository {
         val dbFile = getDatabaseFile(context)
         if (!dbFile.exists()) return emptyList()
 
-        val finalMinLat: Double
-        val finalMaxLat: Double
-        val finalMinLon: Double
-        val finalMaxLon: Double
-
-        if (minLat != null && maxLat != null && minLon != null && maxLon != null) {
-            finalMinLat = Math.min(minLat, maxLat)
-            finalMaxLat = Math.max(minLat, maxLat)
-            finalMinLon = Math.min(minLon, maxLon)
-            finalMaxLon = Math.max(minLon, maxLon)
-        } else {
-            val latDelta = radiusInKm / 111.0
-            val lonDelta = radiusInKm / (111.0 * Math.cos(Math.toRadians(centerLat)))
-            finalMinLat = centerLat - latDelta
-            finalMaxLat = centerLat + latDelta
-            finalMinLon = centerLon - lonDelta
-            finalMaxLon = centerLon + lonDelta
-        }
+        val latDelta = radiusInKm / 111.0
+        val lonDelta = radiusInKm / (111.0 * Math.cos(Math.toRadians(centerLat)))
+        val finalMinLat = centerLat - latDelta
+        val finalMaxLat = centerLat + latDelta
+        val finalMinLon = centerLon - lonDelta
+        val finalMaxLon = centerLon + lonDelta
 
         val list = mutableListOf<PlaceOfInterest>()
         var db: android.database.sqlite.SQLiteDatabase? = null
