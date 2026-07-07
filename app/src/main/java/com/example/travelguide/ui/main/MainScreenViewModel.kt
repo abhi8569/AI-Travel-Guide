@@ -720,6 +720,17 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
+    fun snapToMyLocation() {
+        _uiState.update { 
+            it.copy(
+                useMapCenter = false,
+                mapCenterLocation = it.currentLocation ?: it.mapCenterLocation,
+                mapResetTrigger = it.mapResetTrigger + 1
+            )
+        }
+        startLocationTracking()
+    }
+
     fun scanMapCenterArea() {
         _uiState.update { 
             it.copy(

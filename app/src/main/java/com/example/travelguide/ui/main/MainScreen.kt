@@ -1154,32 +1154,27 @@ fun DashboardView(
                         )
                     }
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                    Column(
+                        modifier = Modifier.align(Alignment.End),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalAlignment = Alignment.End
                     ) {
-                        // Current Location snap/tracking button
+                        // Current Location snap button (native style)
                         Box(
                             modifier = Modifier
                                 .size(40.dp)
                                 .clip(RoundedCornerShape(20.dp))
-                                .background(if (state.locationTrackingActive) primaryGlow else cardBgColor.copy(alpha = 0.85f))
+                                .background(cardBgColor.copy(alpha = 0.9f))
                                 .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(20.dp))
                                 .clickable {
-                                    // Snaps to user location and starts tracking
-                                    if (state.useMapCenter) {
-                                        onToggleMapSearchMode()
-                                    } else {
-                                        vm.toggleLocationTracking()
-                                    }
+                                    vm.snapToMyLocation()
                                 },
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = if (state.locationTrackingActive) Icons.Default.LocationOn else Icons.Default.LocationOff,
-                                contentDescription = "My Location Tracking",
-                                tint = if (state.locationTrackingActive) Color.White else secondaryGlow,
+                                imageVector = Icons.Default.MyLocation,
+                                contentDescription = "Snap to Current Location",
+                                tint = secondaryGlow,
                                 modifier = Modifier.size(20.dp)
                             )
                         }
@@ -1189,15 +1184,16 @@ fun DashboardView(
                             modifier = Modifier
                                 .size(40.dp)
                                 .clip(RoundedCornerShape(20.dp))
-                                .background(cardBgColor.copy(alpha = 0.85f))
+                                .background(cardBgColor.copy(alpha = 0.9f))
                                 .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(20.dp))
                                 .clickable {
-                                    val nextLayer = when (state.settings.mapLayer) {
+                                    val nextLayer = state.settings.mapLayer
+                                    val next = when (nextLayer) {
                                         "dark" -> "light"
                                         "light" -> "satellite"
                                         else -> "dark"
                                     }
-                                    onLayerChanged(nextLayer)
+                                    onLayerChanged(next)
                                 },
                             contentAlignment = Alignment.Center
                         ) {
