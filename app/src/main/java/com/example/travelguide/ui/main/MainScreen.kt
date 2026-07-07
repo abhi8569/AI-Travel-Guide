@@ -111,9 +111,10 @@ fun LeafletMapView(
     onLayerChanged: (String) -> Unit,
     mapResetTrigger: Int,
     activePlace: PlaceOfInterest? = null,
+    isGodModeActive: Boolean = false,
     modifier: Modifier = Modifier,
     onMarkerClick: (PlaceOfInterest) -> Unit = {},
-    onMapCenterChanged: (Double, Double, Double?, Double?, Double?, Double?) -> Unit = { _, _, _, _, _, _ -> },
+    onMapCenterChanged: (Double, Double, Double, Double?, Double?, Double?, Double?) -> Unit = { _, _, _, _, _, _, _ -> },
     onMapClick: () -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -161,7 +162,7 @@ fun LeafletMapView(
                     post {
                         val center = mapCenter
                         val box = boundingBox
-                        onMapCenterChanged(center.latitude, center.longitude, box.latSouth, box.latNorth, box.lonWest, box.lonEast)
+                        onMapCenterChanged(center.latitude, center.longitude, zoomLevelDouble, box.latSouth, box.latNorth, box.lonWest, box.lonEast)
                     }
                 }
                 override fun onViewDetachedFromWindow(v: android.view.View) {}
@@ -212,7 +213,7 @@ fun LeafletMapView(
                     val center = mapView.mapCenter
                     lastCenter = GeoPoint(center.latitude, center.longitude)
                     val box = mapView.boundingBox
-                    onMapCenterChanged(center.latitude, center.longitude, box.latSouth, box.latNorth, box.lonWest, box.lonEast)
+                    onMapCenterChanged(center.latitude, center.longitude, mapView.zoomLevelDouble, box.latSouth, box.latNorth, box.lonWest, box.lonEast)
                 }
                 return true
             }
@@ -222,7 +223,7 @@ fun LeafletMapView(
                     lastCenter = GeoPoint(center.latitude, center.longitude)
                     zoomLevel = mapView.zoomLevelDouble
                     val box = mapView.boundingBox
-                    onMapCenterChanged(center.latitude, center.longitude, box.latSouth, box.latNorth, box.lonWest, box.lonEast)
+                    onMapCenterChanged(center.latitude, center.longitude, mapView.zoomLevelDouble, box.latSouth, box.latNorth, box.lonWest, box.lonEast)
                 }
                 return true
             }
@@ -298,7 +299,6 @@ fun LeafletMapView(
                 icon = activePlaceMarkerIcon
                 setOnMarkerClickListener { marker, map ->
                     onMarkerClick(activePlace)
-                    marker.showInfoWindow()
                     true
                 }
             }
@@ -329,7 +329,6 @@ fun LeafletMapView(
                     icon = placeMarkerIcon
                     setOnMarkerClickListener { marker, map ->
                         onMarkerClick(place)
-                        marker.showInfoWindow()
                         true
                     }
                 }
@@ -353,6 +352,24 @@ fun LeafletMapView(
                 it.onDetach() // Cleanup tile downloading on dispose
             }
         )
+        if (isGodModeActive && zoomLevel < 11.5) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 16.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(Color(0xFF1F1D2C).copy(alpha = 0.9f))
+                    .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(50))
+                    .padding(horizontal = 14.dp, vertical = 6.dp)
+            ) {
+                Text(
+                    text = "🔍 Zoom in to view spots",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 11.sp
+                )
+            }
+        }
         // Floating overlay controls
         Column(
             modifier = Modifier
@@ -837,7 +854,7 @@ fun ContentArea(
                 onSendMessage = { vm.sendChatMessage(it) },
                 onSpeechRateChange = { vm.updateSpeechRate(it) },
                 onSearchCustomLocation = { vm.searchCustomLocation(it) },
-                onMapCenterChanged = { lat, lon, minLat, maxLat, minLon, maxLon -> vm.updateMapCenterLocation(lat, lon, minLat, maxLat, minLon, maxLon) },
+                onMapCenterChanged = { lat, lon, zoom, minLat, maxLat, minLon, maxLon -> vm.updateMapCenterLocation(lat, lon, zoom, minLat, maxLat, minLon, maxLon) },
                 onToggleMapSearchMode = onToggleMapSearchMode,
                 onScanMapCenterArea = { vm.scanMapCenterArea() },
                 onDetailLevelChange = { vm.changeDetailLevelAndRegenerate(it) },
@@ -903,7 +920,7 @@ fun DashboardView(
     onSendMessage: (String) -> Unit,
     onSpeechRateChange: (Float) -> Unit,
     onSearchCustomLocation: (String) -> Unit,
-    onMapCenterChanged: (Double, Double, Double?, Double?, Double?, Double?) -> Unit,
+    onMapCenterChanged: (Double, Double, Double, Double?, Double?, Double?, Double?) -> Unit,
     onToggleMapSearchMode: () -> Unit,
     onScanMapCenterArea: () -> Unit,
     onDetailLevelChange: (String) -> Unit,
@@ -990,6 +1007,7 @@ fun DashboardView(
                     onLayerChanged = onLayerChanged,
                     mapResetTrigger = state.mapResetTrigger,
                     activePlace = state.activePlace,
+                    isGodModeActive = state.settings.isGodModeActive,
                     modifier = Modifier.fillMaxSize(),
                     onMarkerClick = { place ->
                         onSelectPlaceWithoutNarration(place)

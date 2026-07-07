@@ -642,6 +642,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     fun updateMapCenterLocation(
         lat: Double,
         lon: Double,
+        zoom: Double,
         minLat: Double? = null,
         maxLat: Double? = null,
         minLon: Double? = null,
@@ -660,6 +661,12 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         // Debounce database queries to prevent database spam and layout flickering while panning/zooming
         if (_uiState.value.settings.isGodModeActive && _uiState.value.isDatabaseDownloaded) {
             mapDebounceJob?.cancel()
+            if (zoom < 11.5) {
+                // Clear spots when zoomed out beyond threshold in God Mode
+                _uiState.update { it.copy(nearbyPlaces = emptyList()) }
+                lastQueriedLocation = null
+                return
+            }
             mapDebounceJob = viewModelScope.launch {
                 delay(600) // Wait for map to settle (idle)
                 val lastQ = lastQueriedLocation
