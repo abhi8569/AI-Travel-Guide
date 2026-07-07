@@ -135,6 +135,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         viewModelScope.launch {
             settingsRepository.lastLocationFlow.first().let { (lat, lon) ->
                 _uiState.update { it.copy(mapCenterLocation = UserLocation(lat, lon, 0f), mapResetTrigger = it.mapResetTrigger + 1) }
+                searchPlacesNear(lat, lon, isAutoTrigger = true)
             }
         }
     }
@@ -739,6 +740,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
                         fallback
                     }
                 }
+            settingsRepository.updateLastLocation(center.latitude, center.longitude)
             searchPlacesNear(center.latitude, center.longitude, isAutoTrigger = false)
         }
     }
